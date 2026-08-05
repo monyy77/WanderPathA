@@ -11,7 +11,8 @@ from .schema import (
     TERMINAL_ACTIONS,
     MAX_STEPS,
 )
-
+from memory.scratchpad import ShortTermMemory, process_customer_message
+from Context_eval.context_strategies import observation_masking
 
 
 load_dotenv()
@@ -132,11 +133,16 @@ def handle_tool_result(messages, step, result):
 
 conversation_history = {}
 known_tools_by_user = {}
+short_term_memories = {}
 
 async def run_agent(client, user_input: str, user_id: str = "C001"):
     tools = await discover_tools(client)
     current_tool_names = set(tools.keys())
     context = AgentContext(user_id=user_id)
+    if user_id not in short_term_memories:
+        short_term_memories[user_id] = ShortTermMemory()
+
+    memory = short_term_memories[user_id]
     system_prompt = build_system_prompt(sorted(current_tool_names))
     model = build_structured_model(list(current_tool_names))
 
@@ -170,13 +176,36 @@ async def run_agent(client, user_input: str, user_id: str = "C001"):
     known_tools_by_user[user_id] = current_tool_names
 
     messages = conversation_history[user_id]
+    memory.messages.clear()
+    memory.messages.extend(messages)
     messages.append(HumanMessage(content=user_input))
+
+    # Scratchpad: detect and pin any high-stakes fact in this customer
+    # message (rules first, LLM fallback only if rules find nothing).
+    # This runs once per user turn, not per agent step, since it's about
+    # what the *customer* said, not what the agent is doing internally.
+    # turn = number of messages already in this user's transcript, so
+    # each pinned fact records a stable position in the conversation.
+    process_customer_message(memory, user_input, turn=len(messages))
 
     # (Agent Loop)
     for step_num in range(MAX_STEPS):
         print(f"\n--- Step {step_num + 1} ---")
-        
-        step: AgentStep = await model.ainvoke(messages)
+        memory.messages = list(messages)
+        filtered_messages = observation_masking(
+            memory.get_messages())
+
+        # Inject the scratchpad as its own SystemMessage so pruning
+        # strategies (which only ever operate on filtered_messages/the
+        # rolling buffer) can never destroy the plan, sub-goal, or
+        # pinned facts. This block is always the freshest scratchpad
+        # state, appended after masking so it can't get masked itself.
+        scratchpad_block = SystemMessage(
+            content=memory.render_scratchpad_for_prompt()
+        )
+        final_messages = filtered_messages + [scratchpad_block]
+
+        step: AgentStep = await model.ainvoke(final_messages)
         print(f"Thought: {step.thought}")
         print(f"Action: {step.action}")
         messages.append(
