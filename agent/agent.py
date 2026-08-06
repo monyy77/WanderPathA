@@ -12,7 +12,7 @@ from .schema import (
     MAX_STEPS,
 )
 from memory.scratchpad import ShortTermMemory, process_customer_message
-from Context_eval.context_strategies import observation_masking
+from Context_eval.context_strategies import zone_based_pruning
 
 
 load_dotenv()
@@ -192,7 +192,7 @@ async def run_agent(client, user_input: str, user_id: str = "C001"):
     for step_num in range(MAX_STEPS):
         print(f"\n--- Step {step_num + 1} ---")
         memory.messages = list(messages)
-        filtered_messages = observation_masking(
+        filtered_messages = zone_based_pruning(
             memory.get_messages())
 
         # Inject the scratchpad as its own SystemMessage so pruning
