@@ -1,37 +1,25 @@
-# Context Evaluation
+### Context Evaluation
 
-This module implements short-term memory and context window management strategies for the constrained travel support agent.
+This module implements context window management strategies for the constrained travel support agent, and evaluates them against realistic long, tool-heavy WanderPath support transcripts.
 
-## Files
+Short-term memory and the scratchpad live in the separate top-level memory/ package, not here — see memory/README.md. This module only prunes the rolling message buffer; it never touches the scratchpad.
 
-- `memory.py` – Short-term memory and scratchpad implementation.
-- `context_strategies.py` – Context window management strategies:
-  - Sliding Window
-  - Observation Masking
-  - Recursive Summarization
-  - Zone-Based Pruning
-- `test_memory.py` – Unit tests for memory and scratchpad.
-- `test_strategies.py` – Tests for all context strategies.
-- `long_context_tests.py` – Long conversation evaluation scenarios.
-- `evaluate_context.py` – Compares strategies by accuracy, token usage, and latency.
-- `comparison_results.md` – Evaluation results.
+### Files
+context_strategies.py – The four context window management strategies:
+Sliding Window
+Observation & Tool-output Masking
+Recursive Summarization
+Zone-Based Pruning
+test_strategies.py – Unit tests for all four strategies.
+long_context_tests.py – Long-conversation evaluation scenarios (5 realistic multi-step WanderPath transcripts, including cases where the key customer fact is buried mid-conversation, not just at the edges).
+evaluate_context.py – Runs all four strategies against the same test suite and compares them by accuracy, token usage, and latency.
+comparison_results.md – Evaluation results and the strategy selected for the agent (zone_based_pruning, currently wired into agent/agent.py).
+### Running
 
-## Running
-
-Run the memory tests:
-
-```bash
-python -m Context_eval.test_memory
-```
-
-Run the strategy tests:
-
-```bash
+Run the strategy unit tests:
 python -m Context_eval.test_strategies
-```
 
-Run the evaluation:
-
-```bash
+Run the full evaluation (prints per-test and summary results):
 python -m Context_eval.evaluate_context
-```
+
+For the memory/scratchpad tests, see memory/README.md.
