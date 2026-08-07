@@ -1,5 +1,6 @@
 from langchain.messages import AIMessage, HumanMessage
-from memory.scratchpad import ShortTermMemory, process_customer_message
+from memory.short_term_memory import ShortTermMemory
+from memory.fact_extraction import process_customer_message
 from Context_eval.context_strategies import sliding_window
 
 
