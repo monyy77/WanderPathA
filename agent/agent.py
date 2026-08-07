@@ -1,4 +1,11 @@
 import asyncio
+from pyexpat.errors import messages
+from unittest import result
+
+from matplotlib.pyplot import step
+from memory import router
+from memory.fact_extractor_llm import FactExtractorLLM
+from memory.memory_item_factory import MemoryItemFactory
 from pydantic import ValidationError
 from dataclasses import dataclass
 from langchain.messages import AIMessage, HumanMessage, SystemMessage
@@ -11,6 +18,13 @@ from .schema import (
     TERMINAL_ACTIONS,
     MAX_STEPS,
 )
+from memory.scratchpad import ShortTermMemory, process_customer_message
+from Context_eval.context_strategies import zone_based_pruning
+from memory.metadata_builder import MetadataBuilder
+
+from memory.episodic_memory import EpisodicMemory
+from memory.semantic_memory import SemanticMemory
+from memory.consolidation import ConsolidationLayer
 # from memory.short_term_memory import ShortTermMemory
 # from memory.fact_extraction import process_customer_message
 # from Context_eval.context_strategies import zone_based_pruning
@@ -138,14 +152,47 @@ conversation_history = {}
 known_tools_by_user = {}
 short_term_memories = {}
 
+episodic_memories = {}
+semantic_memories = {}
+consolidation_layers = {}
+
+routers = {}
+
 async def run_agent(client, user_input: str, user_id: str = "C001"):
+
     tools = await discover_tools(client)
+
     current_tool_names = set(tools.keys())
+
     context = AgentContext(user_id=user_id)
+
     if user_id not in short_term_memories:
         short_term_memories[user_id] = ShortTermMemory()
 
     memory = short_term_memories[user_id]
+
+    if user_id not in episodic_memories:
+        episodic_memories[user_id] = EpisodicMemory()
+
+    if user_id not in semantic_memories:
+        semantic_memories[user_id] = SemanticMemory()
+
+    if user_id not in consolidation_layers:
+        consolidation_layers[user_id] = ConsolidationLayer(
+            episodic_store=episodic_memories[user_id],
+            semantic_store=semantic_memories[user_id],
+            llm=FactExtractorLLM(),
+        )
+
+    if user_id not in routers:
+        router_llm = router.RouterLLM()
+
+        routers[user_id] = router.PromoteOrDropRouter(
+            episodic_store=episodic_memories[user_id],
+            short_term=memory,
+            llm=router_llm,
+        )
+
     system_prompt = build_system_prompt(sorted(current_tool_names))
     model = build_structured_model(list(current_tool_names))
 
@@ -179,9 +226,54 @@ async def run_agent(client, user_input: str, user_id: str = "C001"):
     known_tools_by_user[user_id] = current_tool_names
 
     messages = conversation_history[user_id]
+
     memory.messages.clear()
     memory.messages.extend(messages)
-    messages.append(HumanMessage(content=user_input))
+
+    user_message = HumanMessage(content=user_input)
+
+    messages.append(user_message)
+    memory.add(user_message)
+
+    memory_item = MemoryItemFactory.from_message(
+        user_message,
+        metadata=MetadataBuilder.build(
+            entity_type="customer",
+            entity_id=user_id,
+        ),
+    )
+
+    memory.add_item(memory_item)
+
+    routers[user_id].route(memory_item)
+
+    routers[user_id].route(memory_item)
+
+    episodic_store = episodic_memories[user_id]
+    consolidation = consolidation_layers[user_id]
+
+    if len(episodic_store.get_unconsolidated()) >= 5:
+        consolidation.consolidate()
+
+
+    semantic_store = semantic_memories[user_id]
+
+    relevant_facts = semantic_store.retrieve(user_input)
+
+    if relevant_facts:
+        memory_context = "\n".join(
+            f"- {fact.predicate}: {fact.value}"
+            for fact in relevant_facts
+        )
+
+        messages.append(
+            SystemMessage(
+                content=(
+                    "Relevant long-term customer memory:\n"
+                    + memory_context
+                )
+            )
+        )
 
     # Scratchpad: detect and pin any high-stakes fact in this customer
     # message (rules first, LLM fallback only if rules find nothing).
@@ -190,6 +282,12 @@ async def run_agent(client, user_input: str, user_id: str = "C001"):
     # turn = number of messages already in this user's transcript, so
     # each pinned fact records a stable position in the conversation.
     process_customer_message(memory, user_input, turn=len(messages))
+
+    # Build metadata
+    metadata = MetadataBuilder.build(
+        entity_type="customer",
+        entity_id=user_id,
+    )
 
     # (Agent Loop)
     for step_num in range(MAX_STEPS):
@@ -216,6 +314,7 @@ async def run_agent(client, user_input: str, user_id: str = "C001"):
         )
         #(Final Action)
         if handle_final_action(step):
+            consolidation_layers[user_id].consolidate()
             return step
         
         #  Step Validation check
@@ -230,12 +329,8 @@ async def run_agent(client, user_input: str, user_id: str = "C001"):
 
         # (MCP Tool Execution)
         try:
-            result = await tool_call(step, tools, context=context) 
+            result = await tool_call(step, tools, context=context)
             handle_tool_result(messages, step, result)
-
-            messages.append(
-                HumanMessage(content=f"Observation from tool '{step.action}': {result}")
-            )  
             
         except ValidationError as e:
             messages.append(

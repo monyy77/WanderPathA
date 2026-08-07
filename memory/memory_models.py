@@ -1,4 +1,3 @@
-
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict
@@ -19,6 +18,7 @@ class MemoryItem:
 class Episode:
     content: str
     entity_type: str
+    entity_id: str | None
     entity_id: int
     source: str
     reason: str
@@ -31,12 +31,15 @@ class Episode:
 
 @dataclass
 class SemanticFact:
-    fact_id: str
     predicate: str
     value: str
     entity_type: str
-    entity_id: str
-    version: int
-    valid_from: datetime
-    valid_until: datetime | None
+    entity_id: str | None
+
     confidence: float
+
+    fact_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    version: int = 1
+    valid_from: datetime = field(default_factory=datetime.now)
+    valid_until: datetime | None = None
+    expires_at: datetime | None = None
