@@ -15,7 +15,7 @@ class SemanticMemory:
         self,
         predicate: str,
         entity_type: str,
-        entity_id: int,
+        entity_id: str | None,
     ) -> SemanticFact | None:
 
         for fact in self.facts:
@@ -35,7 +35,7 @@ class SemanticMemory:
     def get_fact_history(
         self,
         entity_type: str,
-        entity_id: int,
+        entity_id: str | None,
         predicate: str,
     ) -> list[SemanticFact]:
 
