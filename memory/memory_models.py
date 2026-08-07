@@ -1,7 +1,7 @@
-
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict
+import uuid
 
 
 @dataclass
@@ -16,25 +16,29 @@ class MemoryItem:
 
 @dataclass
 class Episode:
-    episode_id: str
     content: str
     entity_type: str
-    entity_id: str
-    created_at: datetime
+    entity_id: str | None
     source: str
     reason: str
-    confidence: float
+
+    episode_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    created_at: datetime = field(default_factory=datetime.now)
+    confidence: float = 1.0
     metadata: Dict = field(default_factory=dict)
 
 
 @dataclass
 class SemanticFact:
-    fact_id: str
     predicate: str
     value: str
     entity_type: str
-    entity_id: str
-    version: int
-    valid_from: datetime
-    valid_until: datetime | None
+    entity_id: str | None
+
     confidence: float
+
+    fact_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    version: int = 1
+    valid_from: datetime = field(default_factory=datetime.now)
+    valid_until: datetime | None = None
+    expires_at: datetime | None = None
