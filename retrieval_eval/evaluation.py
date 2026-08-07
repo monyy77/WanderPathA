@@ -1,5 +1,5 @@
 import pandas as pd
-
+from langchain_community.callbacks import get_openai_callback
 from langchain_groq import ChatGroq
 
 from questions import questions
@@ -72,18 +72,20 @@ for item in questions:
 
     for architecture_name, rag_function in architectures:
 
-        answer, latency = measure_latency(
-            rag_function,
-            question
-        )
+        with get_openai_callback() as cb:
+            answer, latency = measure_latency(
+                rag_function,
+                question
+            )
+            input_tokens = cb.prompt_tokens
+            output_tokens = cb.completion_tokens
+            total_tokens = cb.total_tokens
 
         accuracy = evaluate_accuracy(
             question,
             expected,
             answer
         )
-
-        estimated_tokens = len(answer.split())
 
         rows.append({
 
@@ -99,7 +101,11 @@ for item in questions:
 
             "Latency (s)": round(latency, 3),
 
-            "Estimated Tokens": estimated_tokens
+            "Input Tokens": input_tokens,
+
+            "Output Tokens": output_tokens,
+
+            "Total Tokens": total_tokens
 
         })
 
