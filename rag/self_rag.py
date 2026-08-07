@@ -236,3 +236,14 @@ def self_rag(question: str) -> str:
     inputs = {"question": question, "loop_step": 0}
     output = self_rag_app.invoke(inputs)
     return output.get("generation", "No valid response generated.")
+# 1.(Mermaid Text)
+print(self_rag_app.get_graph().draw_mermaid())
+
+# 2. PNG 
+try:
+    png_data = self_rag_app.get_graph().draw_mermaid_png()
+    with open("self_rag_graph.png", "wb") as f:
+        f.write(png_data)
+    print("Graph image saved as self_rag_graph.png")
+except Exception as e:
+    print("Install pygraphviz/grandalf to export PNG image:", e)
