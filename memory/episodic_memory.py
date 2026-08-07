@@ -25,8 +25,7 @@ class EpisodicMemory:
     def get_by_entity(
         self,
         entity_type: str,
-        entity_id: str | None
-        entity_id: int
+        entity_id: str | int | None
     ) -> list[Episode]:
 
         return [
