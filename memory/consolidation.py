@@ -22,13 +22,16 @@ SemanticFact     llm_extract()
 '''
 
 from memory.memory_models import Episode, SemanticFact
+from memory.fact_extractor_llm import FactExtractorLLM
+
+
 class ConsolidationLayer:
 
     def __init__(
         self,
         episodic_store,
         semantic_store,
-        llm=None,
+        llm,
     ):
         self.episodic_store = episodic_store
         self.semantic_store = semantic_store
@@ -38,7 +41,6 @@ class ConsolidationLayer:
         self,
         episode: Episode
     ):
-
         text = episode.content.lower()
 
         if "window seat" in text:
@@ -65,24 +67,21 @@ class ConsolidationLayer:
         self,
         episode: Episode
     ):
-
-        if self.llm is None:
-            return None
-
         return self.llm.extract_fact(episode)
 
     def extract_fact(
         self,
         episode: Episode
     ):
-
+        # 1. Rule-based first
         fact = self.rule_based_extract(episode)
 
         if fact is not None:
             return fact
 
+        # 2. LLM fallback
         return self.llm_extract(episode)
-    
+
     def consolidate(self):
         episodes = self.episodic_store.get_unconsolidated()
 
@@ -105,10 +104,7 @@ class ConsolidationLayer:
                 continue
 
             if existing_fact.value == fact.value:
-                try:
-                    self.episodic_store.mark_consolidated(episode)
-                except Exception as e:
-                    print(f"Error marking episode as consolidated: {e}")
+                self.episodic_store.mark_consolidated(episode)
                 continue
 
             self.semantic_store.close_fact(existing_fact)
@@ -117,7 +113,6 @@ class ConsolidationLayer:
             self.semantic_store.save(fact)
 
             self.episodic_store.mark_consolidated(episode)
-
 
 '''
 get_unconsolidated()
