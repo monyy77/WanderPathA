@@ -1,5 +1,7 @@
 import time
+from dotenv import load_dotenv
 
+load_dotenv()
 
 def measure_latency(function, *args, **kwargs):
     """
@@ -21,21 +23,48 @@ def measure_latency(function, *args, **kwargs):
     return result, round(latency, 3)
 
 
-def evaluate_accuracy(expected, predicted):
-    """
-    Simple accuracy check.
+from langchain_groq import ChatGroq
 
-    Returns:
-        Correct / Incorrect
-    """
+judge = ChatGroq(
+    model="llama-3.1-8b-instant",
+    temperature=0
+)
 
-    expected = expected.lower().strip()
-    predicted = predicted.lower().strip()
+def evaluate_accuracy(question, expected, answer):
+    prompt = f"""
+You are evaluating a Retrieval-Augmented Generation (RAG) system.
 
-    if expected in predicted:
+Question:
+{question}
+
+Expected Answer:
+{expected}
+
+Generated Answer:
+{answer}
+
+Determine whether the generated answer correctly answers the question based on the expected answer.
+
+Ignore:
+- Different wording
+- Extra correct details
+- Different sentence order
+- Bullet points instead of paragraphs
+
+Only check whether the generated answer is factually correct and contains the important information from the expected answer.
+
+Reply with ONLY one word:
+Correct
+or
+Incorrect
+"""
+
+    result = judge.invoke(prompt).content.strip().upper()
+
+    if "CORRECT" in result:
         return "Correct"
-
-    return "Incorrect"
+    else:
+        return "Incorrect"
 
 
 def estimate_tokens(text):

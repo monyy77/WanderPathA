@@ -11,10 +11,12 @@ from .schema import (
     TERMINAL_ACTIONS,
     MAX_STEPS,
 )
-from memory.short_term_memory import ShortTermMemory
-from memory.fact_extraction import process_customer_message
-from Context_eval.context_strategies import zone_based_pruning
+# from memory.short_term_memory import ShortTermMemory
+# from memory.fact_extraction import process_customer_message
+# from Context_eval.context_strategies import zone_based_pruning
+from rag.self_rag import self_rag
 
+conversation_history = {}
 
 load_dotenv()
 

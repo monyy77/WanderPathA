@@ -2,9 +2,6 @@ import asyncio
 import os
 import sys
 
-from langchain_mcp_adapters.client import MultiServerMCPClient
-
-
 from agent import run_agent  
 from client import create_client
 
@@ -15,42 +12,60 @@ path_to_mcp_server = os.path.abspath(
 mode = sys.argv[1] if len(sys.argv) > 1 else "stdio"
 
 async def main():
-
+    # إنشاء واستدعاء الـ MCP Client
     client = await create_client()
-    tools = await client.get_tools()
 
     print("===================================")
-    print("WanderPath Travel Support Agent")
-    print("Type 'exit' to quit")
-    print("===================================\n")
+    print("  WanderPath Travel Support Agent  ")
+    print("===================================")
+    print("Commands: 'logout' to switch user, 'exit' to quit\n")
 
-    logged_in = True
-    while True:
-        user_id = input("Enter your user ID login: ").strip() # temp for testing
-        logged_in = True
-        if user_id.lower() == "exit":
+    try:
+        while True:
+            user_id = input("Enter your user ID login: ").strip()
+            
+            if user_id.lower() == "exit":
+                print("Goodbye!")
                 break
-        while logged_in == True:
+                
+            if not user_id:
+                continue
 
-            user_input = input("User: ").strip()
+            logged_in = True
+            print(f"\n---> Logged in as: {user_id} <---")
 
+            while logged_in:
+                user_input = input(f"[{user_id}] User: ").strip()
 
-            if user_input.lower() == "logout":
-                from agent import conversation_history
-                conversation_history.pop(user_id, None)
-                logged_in = False
-                print("Logged out.")
-                break
+                if not user_input:
+                    continue
 
-            step = await run_agent(
-                client=client,
-                user_input=user_input,
-                user_id=user_id
-            )
+                if user_input.lower() == "logout":
+                    from agent import conversation_history
+                    conversation_history.pop(user_id, None)
+                    logged_in = False
+                    print(f"Logged out from {user_id}.\n")
+                    break
 
-            if step and step.action == "end_conversation":
-                print("Conversation ended.")
-                break
+                if user_input.lower() == "exit":
+                    print("Goodbye!")
+                    return
+
+                # تشغيل الـ Agent الموحد (MCP + Self-RAG + Memory)
+                step = await run_agent(
+                    client=client,
+                    user_input=user_input,
+                    user_id=user_id
+                )
+
+                if step and getattr(step, "action", None) == "end_conversation":
+                    print("Conversation ended.")
+                    break
+
+    finally:
+        # إغلاق جلسة الـ MCP بشكل آمن عند نهاية التشغيل
+        if hasattr(client, "close"):
+            await client.close()
 
 if __name__ == "__main__":
     asyncio.run(main())
