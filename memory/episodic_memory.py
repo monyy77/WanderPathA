@@ -26,6 +26,7 @@ class EpisodicMemory:
         self,
         entity_type: str,
         entity_id: str | None
+        entity_id: int
     ) -> list[Episode]:
 
         return [

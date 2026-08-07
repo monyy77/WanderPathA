@@ -19,6 +19,7 @@ class Episode:
     content: str
     entity_type: str
     entity_id: str | None
+    entity_id: int
     source: str
     reason: str
 

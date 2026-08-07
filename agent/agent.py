@@ -25,6 +25,12 @@ from memory.metadata_builder import MetadataBuilder
 from memory.episodic_memory import EpisodicMemory
 from memory.semantic_memory import SemanticMemory
 from memory.consolidation import ConsolidationLayer
+# from memory.short_term_memory import ShortTermMemory
+# from memory.fact_extraction import process_customer_message
+# from Context_eval.context_strategies import zone_based_pruning
+from rag.self_rag import self_rag
+
+conversation_history = {}
 
 load_dotenv()
 

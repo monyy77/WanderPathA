@@ -1,18 +1,16 @@
-from vector_db import get_vector_store
+from rag.vector_db import get_vector_store
 
-
-def retrieve(query, k=2):
+def retrieve(query, k=2, filter_dict=None):
     """
-    Retrieve the top-k most relevant chunks.
+    Retrieve top-k chunks with optional pre/mid-search Metadata Filtering.
     """
-
     vector_store = get_vector_store()
-
+    
+    # Pre/Mid filtering logic using Chroma metadata filter
     results = vector_store.similarity_search(
         query=query,
-        k=k
-    )
-
+        k=k,
+        filter=filter_dict )
     return results
 
 

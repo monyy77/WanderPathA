@@ -1,0 +1,159 @@
+import re
+import uuid
+from datetime import datetime
+
+from memory.memory_models import MemoryItem
+from memory.short_term_memory import ShortTermMemory
+
+_RULES: list[tuple[re.Pattern, str | None]] = [
+    (
+        re.compile(r"wheelchair|accessib\w*|mobility[- ]impair\w*", re.I),
+        "Customer requires wheelchair/accessibility accommodation.",
+    ),
+    (
+        re.compile(
+            r"(?:budget|maximum|max)[^.\n]{0,20}?(\d[\d,]{2,})\s*(egp|usd|\$|le)?",
+            re.I,
+        ),
+        None,  # dynamic fact text built from the match, see below
+    ),
+    (
+        re.compile(
+            r"passport[^.\n]{0,40}?(expir\w*)[^.\n]{0,20}?(\d+\s*(?:month|week|day)s?)",
+            re.I,
+        ),
+        None,
+    ),
+    (
+        re.compile(r"voucher\b", re.I),
+        "Customer prefers refund as a travel voucher, not cash.",
+    ),
+    (
+        re.compile(r"\bcash\b.{0,15}refund|refund.{0,15}\bcash\b", re.I),
+        "Customer prefers refund as cash, not a voucher.",
+    ),
+    (
+        re.compile(
+            r"only\s+(?:change|update|modify|rebook)[^.\n]{0,60}",
+            re.I,
+        ),
+        None,
+    ),
+]
+
+
+def _extract_rule_facts(text: str) -> list[str]:
+    facts: list[str] = []
+
+    for pattern, static_fact in _RULES:
+        match = pattern.search(text)
+        if not match:
+            continue
+
+        if static_fact is not None:
+            facts.append(static_fact)
+            continue
+
+        # Dynamic facts: build a readable sentence from what was matched
+        # instead of storing the raw regex groups.
+        if "budget" in pattern.pattern or "maximum" in pattern.pattern:
+            amount = match.group(1)
+            currency = match.group(2) or ""
+            facts.append(f"Customer's maximum budget is {amount} {currency}".strip() + ".")
+        elif "passport" in pattern.pattern:
+            duration = match.group(2)
+            facts.append(f"Customer's passport expires in {duration}.")
+        elif pattern.pattern.startswith("only"):
+            facts.append(f"Conditional instruction from customer: \"{match.group(0).strip()}\"")
+
+    return facts
+
+
+def _extract_llm_fact(user_input: str) -> str | None:
+    """LLM fallback: only called when no rule matched. Best-effort — if the
+    model/API isn't available, this quietly returns None rather than
+    breaking the agent turn.
+    """
+    try:
+        from langchain.chat_models import init_chat_model
+        from pydantic import BaseModel
+
+        class FactExtraction(BaseModel):
+            has_high_stakes_fact: bool
+            fact: str = ""
+
+        model = init_chat_model(
+            model="llama-3.3-70b-versatile",
+            model_provider="groq",
+            max_tokens=128,
+            max_retries=1,
+        ).with_structured_output(FactExtraction)
+
+        result = model.invoke(
+            [
+                (
+                    "system",
+                    "You extract high-stakes facts from a travel customer's "
+                    "message that a support agent must remember for the rest "
+                    "of the conversation (accessibility needs, budget limits, "
+                    "document/passport constraints, refund/payment "
+                    "preferences, hard conditions on changes). If the message "
+                    "has no such fact, set has_high_stakes_fact to false. "
+                    "Keep the fact to one short sentence.",
+                ),
+                ("user", user_input),
+            ]
+        )
+
+        if result.has_high_stakes_fact and result.fact.strip():
+            return result.fact.strip()
+        return None
+    except Exception:
+        return None
+
+
+def _make_memory_item(fact: str, turn: int, source: str) -> MemoryItem:
+    """Build a MemoryItem matching memory/memory_models.py exactly, since
+    PromoteOrDropRouter (memory/router.py) consumes this type directly.
+    Rule-matched facts are deterministic, so they get a higher importance
+    than the LLM fallback's best-effort extraction.
+    """
+    return MemoryItem(
+        id=str(uuid.uuid4()),
+        content=fact,
+        speaker="customer",
+        timestamp=datetime.now(),
+        importance=0.9 if source == "rule" else 0.7,
+        metadata={"turn": turn, "extraction_source": source},
+    )
+
+
+def process_customer_message(memory: ShortTermMemory, user_input: str, turn: int) -> None:
+    """Detect and pin any high-stakes fact in this customer message.
+
+    Rules run first; the LLM fallback only runs if the rules find nothing,
+    so a normal turn ("yes that's fine", "ok thanks") never costs a model
+    call.
+
+    Every pinned fact is recorded twice, for two different consumers:
+    - ``memory.scratchpad.pin(...)`` — read straight back into the
+      prompt every step (see ``render_scratchpad_for_prompt``), so the
+      agent itself never loses it.
+    - ``memory.add_item(...)`` — a MemoryItem queued for
+      PromoteOrDropRouter to later decide forget vs. promote-to-episodic
+      on. These are independent: the router removing an item from
+      ``memory.items`` does not, and must not, erase it from the
+      scratchpad the agent is actively relying on.
+    """
+    rule_facts = _extract_rule_facts(user_input)
+
+    if rule_facts:
+        for fact in rule_facts:
+            memory.scratchpad.pin(fact, turn=turn, source="rule")
+            memory.add_item(_make_memory_item(fact, turn, source="rule"))
+        return
+
+    llm_fact = _extract_llm_fact(user_input)
+    if llm_fact:
+        memory.scratchpad.pin(llm_fact, turn=turn, source="llm")
+        memory.add_item(_make_memory_item(llm_fact, turn, source="llm"))
