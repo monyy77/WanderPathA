@@ -1,4 +1,4 @@
-from vector_db import get_vector_store
+from rag.vector_db import get_vector_store
 
 
 def retrieve(query, k=2):

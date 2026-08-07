@@ -1,0 +1,92 @@
+Architecture,Question,Expected,Answer,Accuracy,Latency (s),Estimated Tokens
+Naive RAG,What is the baggage allowance?,One carry-on bag is allowed. The maximum carry-on weight is typically 7 kg. Checked baggage allowance depends on the ticket type and airline.,"Carry-on baggage: 
+- One carry-on bag is allowed.
+- Maximum weight is typically 7 kg.
+- Personal items such as laptops or handbags are permitted if they fit under the seat.
+
+Checked baggage:
+- Allowance depends on the ticket type and airline.
+- Extra baggage fees may apply for overweight or oversized luggage.",Incorrect,9.469,84
+Hybrid RAG,What is the baggage allowance?,One carry-on bag is allowed. The maximum carry-on weight is typically 7 kg. Checked baggage allowance depends on the ticket type and airline.,"For carry-on baggage, the allowance is one bag with a maximum weight of 7 kg. Additionally, personal items such as laptops or handbags are permitted if they fit under the seat.",Incorrect,7.762,51
+Agentic RAG,What is the baggage allowance?,One carry-on bag is allowed. The maximum carry-on weight is typically 7 kg. Checked baggage allowance depends on the ticket type and airline.,"The baggage allowance depends on the ticket type and airline for checked baggage. For carry-on baggage, one bag is allowed with a maximum weight of typically 7 kg.",Incorrect,7.268,47
+Naive RAG,How early should I arrive at the airport?,Passengers should arrive at least 2 hours before domestic flights and 3 hours before international flights.,"You should arrive at the airport at least:
+
+- 2 hours before domestic flights.
+- 3 hours before international flights.",Incorrect,8.706,39
+Hybrid RAG,How early should I arrive at the airport?,Passengers should arrive at least 2 hours before domestic flights and 3 hours before international flights.,You should arrive at the airport at least 2 hours before domestic flights and 3 hours before international flights.,Incorrect,7.689,38
+Agentic RAG,How early should I arrive at the airport?,Passengers should arrive at least 2 hours before domestic flights and 3 hours before international flights.,"You should arrive at the airport at least:
+
+- 2 hours before domestic flights.
+- 3 hours before international flights.",Incorrect,7.06,39
+Naive RAG,Which travel documents are required?,"Passengers need a valid passport, required visas, and health certificates when applicable.","Passengers are responsible for ensuring they have:
+
+- Valid passport
+- Required visas
+- Health certificates when applicable",Incorrect,6.217,39
+Hybrid RAG,Which travel documents are required?,"Passengers need a valid passport, required visas, and health certificates when applicable.","Valid passport and required visas. Additionally, health certificates may be required when applicable.",Incorrect,6.441,34
+Agentic RAG,Which travel documents are required?,"Passengers need a valid passport, required visas, and health certificates when applicable.","Passengers are responsible for ensuring they have:
+
+1. Valid passport
+2. Required visas
+3. Health certificates when applicable",Incorrect,14.435,40
+Naive RAG,Can I cancel a promotional ticket?,Promotional tickets are generally non-refundable or subject to strict cancellation policies.,"According to the provided context, some promotional tickets cannot be changed or refunded.",Incorrect,7.272,30
+Hybrid RAG,Can I cancel a promotional ticket?,Promotional tickets are generally non-refundable or subject to strict cancellation policies.,"It depends on the specific promotional ticket. Some promotional tickets cannot be changed or refunded, while others may have different rules. I would need more information about the ticket to determine if it can be canceled.",Incorrect,8.217,64
+Agentic RAG,Can I cancel a promotional ticket?,Promotional tickets are generally non-refundable or subject to strict cancellation policies.,"Unfortunately, some promotional tickets cannot be changed or refunded. It's best to check the fare rules for your specific ticket to see if it's eligible for a refund or change.",Incorrect,14.335,52
+Naive RAG,What happens if the airline cancels my flight?,"Passengers may be offered rebooking, a refund, or compensation depending on the airline policy.","If an airline cancels a flight, customers may choose one of the following options:
+
+- Full refund
+- Flight rebooking
+- Travel voucher (if offered by the airline)
+
+The available options depend on the airline.",Incorrect,7.474,62
+Hybrid RAG,What happens if the airline cancels my flight?,"Passengers may be offered rebooking, a refund, or compensation depending on the airline policy.","If the airline cancels your flight, you may choose one of the following options, depending on the airline's policies:
+
+1. Full refund
+2. Flight rebooking
+3. Travel voucher (if offered by the airline)
+
+Please note that the available options may vary depending on the airline.",Incorrect,7.269,79
+Agentic RAG,What happens if the airline cancels my flight?,"Passengers may be offered rebooking, a refund, or compensation depending on the airline policy.","If an airline cancels your flight, you may choose one of the following options, depending on the airline:
+
+1. Full refund
+2. Flight rebooking
+3. Travel voucher (if offered by the airline)
+
+Please note that the available options may vary depending on the airline.",Incorrect,7.678,76
+Naive RAG,I booked a promotional ticket and cancelled after 24 hours. Am I eligible for a refund?,The refund depends on the cancellation policy. Promotional tickets are usually non-refundable.,"Unfortunately, you are not eligible for a refund. As you booked a promotional ticket, it is likely non-refundable, and the cancellation rules for promotional or discounted tickets state that they cannot be changed or refunded.",Incorrect,7.578,77
+Hybrid RAG,I booked a promotional ticket and cancelled after 24 hours. Am I eligible for a refund?,The refund depends on the cancellation policy. Promotional tickets are usually non-refundable.,"Unfortunately, you are not eligible for a refund. As per the context, some promotional tickets cannot be changed or refunded.",Incorrect,7.283,52
+Agentic RAG,I booked a promotional ticket and cancelled after 24 hours. Am I eligible for a refund?,The refund depends on the cancellation policy. Promotional tickets are usually non-refundable.,"Unfortunately, it's unlikely that you'll be eligible for a refund since you booked a promotional ticket. According to the information provided, some promotional tickets are non-refundable.",Incorrect,18.823,68
+Naive RAG,My flight was delayed. How will I receive updates?,"Passengers receive delay updates through email, SMS, or the airline mobile application.","You may receive updates through:
+
+- Email
+- SMS
+- Mobile application notifications",Incorrect,7.678,32
+Hybrid RAG,My flight was delayed. How will I receive updates?,"Passengers receive delay updates through email, SMS, or the airline mobile application.","If your flight was delayed, you may receive updates through:
+
+- Email
+- SMS
+- Mobile application notifications",Incorrect,8.192,39
+Agentic RAG,My flight was delayed. How will I receive updates?,"Passengers receive delay updates through email, SMS, or the airline mobile application.","You may receive updates through:
+
+- Email
+- SMS
+- Mobile application notifications",Incorrect,7.576,32
+Naive RAG,Can I change the passenger name after the ticket is issued?,Changing the passenger to another person is generally not permitted after ticket issuance.,Changing the passenger to a different person is generally not permitted after ticket issuance.,Incorrect,7.842,37
+Hybrid RAG,Can I change the passenger name after the ticket is issued?,Changing the passenger to another person is generally not permitted after ticket issuance.,Changing the passenger to a different person is generally not permitted after ticket issuance.,Incorrect,7.614,37
+Agentic RAG,Can I change the passenger name after the ticket is issued?,Changing the passenger to another person is generally not permitted after ticket issuance.,Changing the passenger to a different person is generally not permitted after ticket issuance.,Incorrect,17.204,37
+Naive RAG,Which items are prohibited in baggage?,"Explosives, flammable liquids, weapons, and dangerous chemicals are generally prohibited.","- Explosives
+- Flammable liquids
+- Weapons
+- Dangerous chemicals",Incorrect,9.42,25
+Hybrid RAG,Which items are prohibited in baggage?,"Explosives, flammable liquids, weapons, and dangerous chemicals are generally prohibited.","The following items are generally prohibited:
+
+1. Explosives
+2. Flammable liquids
+3. Weapons
+4. Dangerous chemicals",Incorrect,8.292,37
+Agentic RAG,Which items are prohibited in baggage?,"Explosives, flammable liquids, weapons, and dangerous chemicals are generally prohibited.","The following items are generally prohibited:
+
+- Explosives
+- Flammable liquids
+- Weapons
+- Dangerous chemicals",Incorrect,15.77,36

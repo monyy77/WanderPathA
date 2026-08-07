@@ -1,5 +1,5 @@
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from dataloader import load_documents
+from rag.dataloader import load_documents
 
     
 def create_chunks(chunk_size=500, chunk_overlap=50):

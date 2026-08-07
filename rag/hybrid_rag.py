@@ -1,10 +1,11 @@
-from retriever import retrieve
-from chunking import create_chunks
+from rag.retriever import retrieve
+from rag.chunking import create_chunks
 
 from rank_bm25 import BM25Okapi
 
 from langchain_groq import ChatGroq
-
+from dotenv import load_dotenv
+load_dotenv()
 
 
 llm = ChatGroq(

@@ -1,7 +1,8 @@
-from retriever import retrieve
+from rag.retriever import retrieve
 from langchain_groq import ChatGroq
 
-
+from dotenv import load_dotenv
+load_dotenv()
 # LLM
 llm = ChatGroq(
     model="llama-3.1-8b-instant",
