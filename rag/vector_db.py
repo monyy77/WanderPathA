@@ -3,7 +3,7 @@ import os
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 
-from chunking import create_chunks
+from rag.chunking import create_chunks
 
 
 PERSIST_DIRECTORY = "./chroma_db"

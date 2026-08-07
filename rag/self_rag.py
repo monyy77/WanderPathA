@@ -1,6 +1,11 @@
-from retriever import retrieve
+from rag.retriever import retrieve
 from langchain_groq import ChatGroq
+from memory.episodic_memory import retrieve as retrieve_episodic
+from memory.semantic_memory import retrieve as retrieve_semantic
 
+# episodic = retrieve_episodic(question)
+# semantic = retrieve_semantic(question)
+# memory_context = episodic + "\n\n" + semantic
 
 llm = ChatGroq(
     model="llama-3.1-8b-instant",
@@ -10,7 +15,8 @@ llm = ChatGroq(
 
 def verify_context(question, context):
     """
-    Check whether the retrieved context is relevant to the question.
+    Verify that the retrieved information
+    (RAG documents OR Memories) is relevant.
     """
 
     prompt = f"""
@@ -19,12 +25,12 @@ You are a retrieval verifier.
 Question:
 {question}
 
-Retrieved Context:
+Retrieved Information:
 {context}
 
-Is this context relevant enough to answer the question?
+Is this information relevant enough to answer the question?
 
-Reply only with YES or NO.
+Reply ONLY with YES or NO.
 """
 
     result = llm.invoke(prompt).content.strip()
@@ -34,21 +40,22 @@ Reply only with YES or NO.
 
 def verify_answer(answer, context):
     """
-    Check whether the generated answer is fully supported by the context.
+    Verify that the generated answer is supported
+    by the retrieved information.
     """
 
     prompt = f"""
 You are a factual verifier.
 
-Retrieved Context:
+Retrieved Information:
 {context}
 
 Generated Answer:
 {answer}
 
-Is the answer completely supported by the context?
+Is the answer fully supported by the retrieved information?
 
-Reply only with YES or NO.
+Reply ONLY with YES or NO.
 """
 
     result = llm.invoke(prompt).content.strip()
@@ -56,65 +63,82 @@ Reply only with YES or NO.
     return "YES" in result.upper()
 
 
-def self_rag(question):
+def self_rag(question, memory_context=""):
+    """
+    Self-RAG Verification Layer
+
+    Parameters
+    ----------
+    question : str
+
+    memory_context : str
+        Retrieved episodic / semantic memory.
+        Default = "".
+    """
 
     # -----------------------------
-    # RAG Retrieval
+    # Retrieve RAG Documents
     # -----------------------------
+
     docs = retrieve(question, k=3)
 
-    context = "\n\n".join(
-        [doc.page_content for doc in docs]
+    rag_context = "\n\n".join(
+        doc.page_content
+        for doc in docs
     )
 
-    # -------------------------------------------------
-    # TODO (Memory Team):
-    # Retrieve memories here (episodic / semantic),
-    # verify them using verify_context(),
-    # then merge them with the RAG context.
-    #
-    # Example:
-    #
-    # memories = retrieve_memory(question)
-    #
-    # if verify_context(question, memories):
-    #     context += "\n\n" + memories
-    #
-    # This satisfies the requirement:
-    # "Verification applies to both RAG and Memory."
-    # -------------------------------------------------
-
     # -----------------------------
-    # Verify retrieved context
+    # Verify RAG Context
     # -----------------------------
-    if not verify_context(question, context):
 
-        print("Retrieved context not relevant. Retrying...")
+    if not verify_context(question, rag_context):
+
+        print("RAG retrieval not sufficient. Retrying...")
 
         docs = retrieve(question, k=5)
 
-        context = "\n\n".join(
-            [doc.page_content for doc in docs]
+        rag_context = "\n\n".join(
+            doc.page_content
+            for doc in docs
         )
 
-        # If retrieval still fails -> visible consequence
-        if not verify_context(question, context):
+    # -----------------------------
+    # Verify Memory
+    # -----------------------------
 
-            return (
-                "Unable to retrieve reliable information "
-                "for this question."
-            )
+    verified_memory = ""
+
+    if memory_context:
+
+        if verify_context(question, memory_context):
+
+            verified_memory = memory_context
+
+        else:
+
+            print("Memory rejected by verification.")
+
+    # -----------------------------
+    # Merge Context
+    # -----------------------------
+
+    full_context = rag_context
+
+    if verified_memory:
+
+        full_context += "\n\n" + verified_memory
 
     # -----------------------------
     # Generate Answer
     # -----------------------------
-    answer_prompt = f"""
+
+    prompt = f"""
 You are a travel assistant.
 
-Answer ONLY using the following context.
+Answer ONLY using the provided information.
 
 Context:
-{context}
+{full_context}
 
 Question:
 {question}
@@ -122,25 +146,24 @@ Question:
 Answer:
 """
 
-    answer = llm.invoke(answer_prompt).content
+    answer = llm.invoke(prompt).content
 
     # -----------------------------
-    # Verify Generated Answer
+    # Verify Final Answer
     # -----------------------------
-    if verify_answer(answer, context):
+
+    if verify_answer(answer, full_context):
 
         return answer
 
-    print("Generated answer is not supported. Regenerating...")
+    print("Answer verification failed. Regenerating...")
 
-    # Retry generation once
-    regenerated_answer = llm.invoke(answer_prompt).content
+    regenerated = llm.invoke(prompt).content
 
-    if verify_answer(regenerated_answer, context):
+    if verify_answer(regenerated, full_context):
 
-        return regenerated_answer
+        return regenerated
 
-    # Visible consequence if verification fails
     return (
         "The generated answer could not be verified "
         "against the retrieved knowledge."
@@ -151,4 +174,9 @@ if __name__ == "__main__":
 
     question = "What happens if the airline cancels my flight?"
 
-    print(self_rag(question))
+    print(
+        self_rag(
+            question,
+            memory_context=""
+        )
+    )

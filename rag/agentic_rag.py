@@ -1,11 +1,16 @@
-from retriever import retrieve
+from groq import Groq
+from dotenv import load_dotenv
+from rag.retriever import retrieve
 from langchain_groq import ChatGroq
+import os
 
-
+load_dotenv()
 llm = ChatGroq(
     model="llama-3.1-8b-instant",
     temperature=0
 )
+
+
 
 
 def agentic_rag(question, max_steps=2):
