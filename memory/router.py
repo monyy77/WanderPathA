@@ -1,9 +1,23 @@
 from enum import Enum
+
+from pydantic import BaseModel, Field
+from langchain.chat_models import init_chat_model
+
 from memory.memory_models import MemoryItem, Episode
 
 class Decision(Enum):
     PROMOTE = "PROMOTE"
     DROP = "DROP"
+
+class RouterDecision(BaseModel):
+    decision: Decision = Field(
+        description="Whether to PROMOTE or DROP the memory item."
+    )
+
+    reason: str = Field(
+        description="Short explanation for the decision."
+    )
+
 
 GREETINGS = ["hello", "hi", "hey",
             "goodbye", "bye", "thanks", "thank you"]
@@ -19,6 +33,67 @@ REFUND_EVENTS = ["refund requested", "refund approved", "refund"]
 CANCELLATION_EVENTS = ["booking cancelled","booking canceled","cancel reservation"]
 
 PROFILE_UPDATE_EVENTS = ["profile updated", "profile changed", "update profile"]
+
+
+class RouterLLM:
+
+    def __init__(self):
+        self.model = init_chat_model(
+            model="llama-3.3-70b-versatile",
+            model_provider="groq",
+            max_tokens=128,
+            max_retries=2,
+        ).with_structured_output(RouterDecision)
+
+    def make_decision(
+        self,
+        item: MemoryItem,
+    ) -> tuple[Decision, str]:
+
+        result = self.model.invoke(
+            [
+                (
+                    "system",
+                    """
+You are a memory routing classifier for a travel agency.
+
+Decide whether a customer message should be:
+
+PROMOTE:
+The message contains information worth keeping in long-term
+episodic memory, such as:
+- persistent customer preferences
+- important booking events
+- cancellation or refund events
+- customer profile information
+- constraints that may matter in future interactions
+
+DROP:
+The message is temporary conversation and is not useful
+for future interactions, such as:
+- greetings
+- acknowledgements
+- casual conversation
+- temporary statements
+
+Do not invent information.
+
+Return only the structured decision and a short reason.
+"""
+                ),
+                (
+                    "user",
+                    item.content
+                ),
+            ]
+        )
+
+        decision = result.decision
+
+        if decision == Decision.PROMOTE:
+            return Decision.PROMOTE, result.reason
+
+        return result.decision, result.reason
 
 class PromoteOrDropRouter:
 
