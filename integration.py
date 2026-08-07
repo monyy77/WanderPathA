@@ -10,20 +10,21 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 from retrieval_eval.questions import questions
 from retrieval_eval.metrics import (
     measure_latency,
-    evaluate_accuracy,  # ستعمل الآن بنظام LLM Judge المستورد من metrics
+    evaluate_accuracy, 
     count_total_tokens
 )
 
 from rag.naive_rag import naive_rag
 from rag.hybrid_rag import hybrid_rag
 from rag.agentic_rag import agentic_rag
+from rag.self_rag import self_rag
 
 ARCHITECTURES = {
     "Naive RAG": naive_rag,
     "Hybrid RAG": hybrid_rag,
-    "Agentic RAG": agentic_rag
+    "Agentic RAG": agentic_rag,
+    "Self-RAG": self_rag
 }
-
 
 def evaluate():
     results = []
@@ -43,9 +44,8 @@ def evaluate():
                 question
             )
 
-            # 2. Evaluate accuracy (تمرير البرامترات الثلاثة المطلوبة للـ LLM Judge)
             accuracy = evaluate_accuracy(
-             
+             question,
                 expected,
                 answer
             )
