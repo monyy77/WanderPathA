@@ -121,6 +121,10 @@ class PromoteOrDropRouter:
             metadata=item.metadata.copy()
         )
 
+        episode.created_at = item.timestamp
+
+        return episode
+
     def promote_to_episode(
         self,
         item: MemoryItem,
