@@ -1,126 +1,123 @@
-WanderPath Travel Agency – Memory & RAG Lab
+# WanderPath Travel Agency – Memory & RAG Lab
 
-Team Members
+## Team Members
 
-Menna Sobhe
+- Menna Sobhe
+- Moun Reda
+- Diana Emil
 
-Moun Reda
+## Company
 
-Diana Emil
+**WanderPath Travel Agency**
 
-Company
+**Industry:** Travel & Tourism
 
-WanderPath Travel Agency
+---
 
-Industry
+## Project Overview
 
-Travel & Tourism
+This project extends the existing **WanderPath Travel Agency MCP Server** by adding a complete memory and retrieval architecture.
 
-Project Overview
+The original agent could access live company data through MCP tools, but it had two major limitations:
 
-This project extends the existing WanderPath Travel Agency MCP Server by adding a complete Memory and RAG architecture.
+- Conversation information was not preserved effectively across interactions.
+- The agent could not reliably reason over company knowledge outside direct MCP tool calls.
 
-The system enables the travel support agent to maintain short-term and long-term customer memory while retrieving grounded company knowledge when needed.
+This project adds:
 
-The project includes:
+- Short-Term Memory
+- Scratchpad
+- Context Window Management
+- Promote-or-Drop Routing
+- Episodic Memory
+- Semantic Memory
+- Memory Consolidation
+- Vector Database
+- Naive RAG
+- Hybrid Search
+- Agentic RAG
+- Self-RAG-style Verification
+- End-to-End Agent Integration
 
-Short-Term Memory
+The implementation extends the existing `mcp_server/` and `db/` instead of rebuilding them.
 
-Scratchpad
+---
 
-Context Window Management
+## Problem Statement
 
+Travel support conversations can become long and contain large tool outputs such as:
+
+- Booking information
+- Flight information
+- Customer profiles
+- Refund information
+- Cancellation details
+- Rebooking options
+- Company policies
+
+Keeping the entire conversation inside the context window increases token usage and can cause important customer information to be lost.
+
+At the same time, many questions cannot be answered directly from the database. Important knowledge such as refund policies, cancellation rules, VIP benefits, compensation rules, and travel policies must be retrieved from external knowledge.
+
+The goal is therefore to provide the agent with both:
+
+1. **Long-term memory** of important customer information
+2. **Grounded retrieval** of company knowledge
+
+---
+
+## Overall Architecture
+
+```text
+                         User
+                          |
+                          v
+                    Travel Agent
+                          |
+             +------------+------------+
+             |                         |
+             v                         v
+      Short-Term Memory            Retrieval Layer
+             |                         |
+       +-----+-----+             +-----+-----+
+       |           |             |           |
+   Transcript   Scratchpad    Vector DB    Keyword Search
+       |                         |           |
+       v                         v           v
+Context Management          Naive / Hybrid / Agentic RAG
+       |
+       v
 Promote-or-Drop Router
+       |
+    +--+--+
+    |     |
+  DROP  PROMOTE
+    |     |
+ Forget   v
+       Episodic Memory
+             |
+       Periodic Consolidation
+             |
+             v
+       Semantic Memory
+             |
+             v
+       Memory Retrieval
+             |
+             +-------------+
+                           |
+                           v
+                  Self-RAG Verification
+                           |
+                           v
+                       Final Answer
+```
 
-Router LLM
+---
 
-Episodic Memory
+## Project Structure
 
-Semantic Memory
-
-Memory Consolidation
-
-Fact Extraction LLM
-
-Vector Database
-
-Naive RAG
-
-Hybrid Search
-
-Agentic RAG
-
-Self-RAG Verification
-
-End-to-End Agent Integration
-
-The existing MCP Server and MySQL database are reused as the foundation of the system.
-
-Problem Statement
-
-Travel support conversations may contain large amounts of information, including:
-
-Booking details
-
-Flight information
-
-Customer profiles
-
-Refunds
-
-Cancellations
-
-Rebooking options
-
-Company policies
-
-Tool outputs
-
-Keeping the entire conversation in the context window increases token usage and may cause important information to be lost.
-
-The agent also needs access to company knowledge that is not directly available through MCP tools.
-
-The goal is to provide the agent with:
-
-Long-term memory of important customer information.
-
-Grounded retrieval of company knowledge.
-
-Overall Architecture
-
-flowchart TD
-    U[User] --> A[Travel Support Agent]
-
-    A --> STM[Short-Term Memory]
-    A --> RAG[RAG Retrieval]
-
-    STM --> M[Messages]
-    STM --> S[Scratchpad]
-    STM --> C[Context Management]
-
-    C --> R[Promote-or-Drop Router]
-
-    R -->|DROP| D[Forget]
-    R -->|PROMOTE| E[Episodic Memory]
-
-    E --> CON[Consolidation Layer]
-    CON --> SEM[Semantic Memory]
-    SEM --> MR[Long-Term Memory Retrieval]
-
-    RAG --> VS[Vector Search]
-    RAG --> KS[Keyword / BM25 Search]
-    RAG --> AR[Agentic RAG]
-
-    VS --> RC[Retrieved Context]
-    KS --> RC
-    AR --> RC
-    MR --> RC
-
-    RC --> SR[Self-RAG Verification]
-    SR --> FA[Final Answer]
-
-Project Structure
-
+```text
 .
 ├── README.md
 ├── requirements.txt
@@ -148,6 +145,7 @@ Project Structure
 │
 ├── context_eval/
 │   ├── context_strategies.py
+│   ├── long_context_tests.py
 │   └── ...
 │
 ├── rag/
@@ -172,680 +170,706 @@ Project Structure
     ├── schema.sql
     ├── data.sql
     └── erd.png
+```
 
+---
+
+## Short-Term Memory
+
+Short-Term Memory contains three independent structures:
+
+**Message Buffer** — Stores the rolling conversation transcript.
+
+**Scratchpad** — Stores information that must survive context pruning:
+
+- Current plan
+- Current sub-goal
+- Working state
+- High-stakes customer facts
+
+**MemoryItem Queue** — Stores customer information waiting for the Promote-or-Drop Router.
+
+```text
 Short-Term Memory
+├── messages
+├── scratchpad
+└── items
+```
 
-Short-Term Memory contains three separate structures.
+The scratchpad is injected into the agent prompt after context pruning, preventing important state from being removed.
 
-Message Buffer
+---
 
-Stores the rolling conversation transcript.
+## Context Window Management
 
-Scratchpad
+Four context management strategies are implemented:
 
-Stores information that must survive context pruning:
+- Sliding Window
+- Observation / Tool Output Masking
+- Recursive Summarization
+- Zone-Based Pruning
 
-Current plan
+All strategies are evaluated using long-context conversations containing:
 
-Current sub-goal
+- Multiple customer turns
+- Large MCP tool outputs
+- Important information buried early in the conversation
+- Repeated irrelevant observations
 
-Working state
+Each strategy is evaluated using:
 
-High-stakes customer facts
-
-MemoryItem Queue
-
-Stores customer information waiting for the Promote-or-Drop Router.
-
-flowchart TD
-    STM[Short-Term Memory] --> MB[Messages]
-    STM --> SP[Scratchpad]
-    STM --> MI[MemoryItem Queue]
-
-The scratchpad is injected into the agent prompt after context pruning so important information is never removed by the context strategy.
-
-Context Window Management
-
-The system implements four context management strategies:
-
-Sliding Window
-
-Observation / Tool Output Masking
-
-Recursive Summarization
-
-Zone-Based Pruning
-
-Long-context conversations are evaluated using:
-
-Task accuracy
-
-Input tokens
-
-Output tokens
-
-Latency
+- Task accuracy
+- Input tokens
+- Output tokens
+- Latency
 
 The selected strategy is integrated into the live agent loop.
 
-Promote-or-Drop Router
+---
 
-The router decides which MemoryItem should be retained.
+## Promote-or-Drop Router
 
-flowchart TD
-    MI[MemoryItem] --> RR[Rule-Based Router]
+The router decides what should survive short-term memory.
 
-    RR -->|PROMOTE| E[Episodic Memory]
-    RR -->|DROP| F[Forget]
-    RR -->|UNKNOWN| LLM[Router LLM]
+```text
+MemoryItem
+    |
+    v
+Rule-Based Router
+    |
+    +---- PROMOTE ----> Episodic Memory
+    |
+    +---- DROP --------> Forget
+    |
+    +---- Unknown
+             |
+             v
+         Router LLM
+             |
+        +----+----+
+        |         |
+     PROMOTE     DROP
+```
 
-    LLM -->|PROMOTE| E
-    LLM -->|DROP| F
+The router never writes directly to Semantic Memory.
 
-Rules are evaluated first. The Router LLM is used only when the rules cannot determine the appropriate decision.
-
-The router returns either:
-
-PROMOTE + reason
-
-or:
-
-DROP + reason
-
-The router only makes the decision between:
-
-PROMOTE
-
-DROP
-
-It never writes directly to Semantic Memory.
-
-The routing reason is logged for traceability.
-
-Router LLM
+### Router LLM
 
 The Router LLM is responsible only for deciding whether a memory item should be retained.
 
-It is separate from the Fact Extractor LLM.
+It returns:
 
-Router LLM
-"What should I remember?"
+- `PROMOTE + reason`
+- or `DROP + reason`
 
-Fact Extractor LLM
-"What exactly is the persistent fact?"
+The Router LLM is separate from the Fact Extractor LLM.
 
-This separation keeps memory routing and semantic fact extraction as independent responsibilities.
+> **Router LLM** — "What should I remember?"
+>
+> **Fact Extractor LLM** — "What exactly is the persistent fact?"
 
-MemoryItem
+---
 
-MemoryItem connects customer messages to the memory pipeline.
+## Episodic Memory
 
-MemoryItem(
-    id=...,
-    content=...,
-    speaker="customer",
-    timestamp=...,
-    importance=...,
-    metadata=...
-)
+Important customer events are stored as `Episode` objects.
 
-Metadata can include:
+Examples include:
 
-entity_type
-entity_id
-turn
-extraction_source
-
-A MemoryItem can be created from a customer message and placed into the Short-Term Memory queue for routing.
-
-Episodic Memory
-
-Important customer events are stored as Episode objects.
-
-Examples:
-
-Booking confirmations
-
-Booking cancellations
-
-Refund requests
-
-Customer preferences
-
-Profile updates
-
-Important travel events
+- Booking confirmations
+- Booking cancellations
+- Refund requests
+- Customer preferences
+- Profile updates
+- Important travel events
 
 An episode contains:
 
-content
-entity_type
-entity_id
-source
-reason
-created_at
-metadata
+- `content`
+- `entity_type`
+- `entity_id`
+- `source`
+- `reason`
+- `timestamp`
+- `metadata`
 
-The routing reason is preserved so promotion decisions remain explainable.
+The routing reason is preserved so that every promotion decision is explainable.
 
-Semantic Memory
+---
+
+## Semantic Memory
 
 Semantic Memory stores persistent facts extracted from episodic memories.
 
 Examples:
 
-seat_preference → window
-meal_preference → vegetarian
-refund_preference → voucher
+- `seat_preference` → window
+- `meal_preference` → vegetarian
+- `refund_preference` → voucher
 
 Semantic facts support:
 
-Versioning
+- Versioning
+- Expiration
+- Validity periods
+- Conflict resolution
+- Entity-based retrieval
 
-Expiration
+### Consolidation Layer
 
-Validity periods
+Semantic Memory is never written directly by the Router. Instead:
 
-Conflict resolution
-
-Entity-based retrieval
-
-Consolidation Layer
-
-The Router does not write directly to Semantic Memory.
-
-Instead, episodic memories are periodically consolidated.
-
-flowchart TD
-    E[Episodic Memory] --> C[Consolidation Layer]
-    C --> R[Rule-Based Fact Extraction]
-
-    R -->|Fact Found| SF[Semantic Fact]
-    R -->|No Fact| LLM[Fact Extractor LLM]
-
-    LLM --> SF
-    SF --> SM[Semantic Memory]
+```text
+Episodic Memory
+      |
+      v
+Periodic Consolidation
+      |
+      v
+Rule-Based Extraction
+      |
+      +---- Fact found ----> Semantic Fact
+      |
+      +---- No fact
+              |
+              v
+        Fact Extractor LLM
+              |
+              v
+        Semantic Fact
+```
 
 The consolidation layer handles:
 
-New facts
+- New facts
+- Updated facts
+- Contradictory facts
+- Fact versioning
+- Expiration
+- Historical validity
 
-Updated facts
+When a fact changes, the previous version is closed instead of silently overwritten.
 
-Contradictory facts
+---
 
-Fact versioning
-
-Expiration
-
-Historical validity
-
-When a fact changes, the previous version is closed and a new version is created.
-
-Fact Extractor LLM
-
-The Fact Extractor LLM is responsible for extracting persistent semantic information from an episode.
-
-It returns structured information containing:
-
-is_fact
-predicate
-value
-confidence
-
-For example:
-
-Customer prefers a window seat.
-        ↓
-predicate: seat_preference
-value: window
-confidence: 1.0
-
-Rule-based extraction is attempted first, with the LLM used as a fallback.
-
-High-Stakes Scratchpad Facts
-
-The scratchpad detects important customer information that must remain available during the current conversation.
-
-Examples include:
-
-Accessibility requirements
-
-Budget limits
-
-Passport constraints
-
-Refund preferences
-
-Hard booking conditions
-
-The detection pipeline is:
-
-flowchart TD
-    M[Customer Message] --> R[Rules]
-
-    R -->|Found| P1[Pin Fact]
-    R -->|Not Found| LLM[LLM]
-    LLM --> P2[Pin Fact]
-
-Each extracted fact can also be converted into a MemoryItem so it can participate in the long-term memory pipeline.
-
-Memory Retrieval
+## Memory Retrieval
 
 Relevant semantic memories are retrieved for the current customer query.
 
-flowchart LR
-    Q[User Query] --> R[Semantic Memory Retrieval]
-    R --> F[Relevant Customer Facts]
-    F --> C[Agent Context]
+```text
+User Query
+    |
+    v
+Semantic Memory Retrieval
+    |
+    v
+Relevant Customer Facts
+    |
+    v
+Agent Context
+```
 
-This allows the agent to use information remembered from previous interactions.
+This allows the agent to remember information from previous interactions.
 
+---
+
+## High-Stakes Scratchpad Facts
+
+The scratchpad detects important information from customer messages.
+
+Examples:
+
+- Accessibility requirements
+- Budget limits
+- Passport constraints
+- Refund preferences
+- Booking conditions
+
+Detection uses:
+
+```text
+Rules
+  |
+  +---- Found ----> Pin Fact
+  |
+  +---- Not Found
+          |
+          v
+        LLM
+          |
+          v
+       Pin Fact
+```
+
+Each extracted fact is also represented as a `MemoryItem` so it can participate in the long-term memory pipeline.
+
+---
+
+## Vector Database
+
+The retrieval system uses a real vector database architecture consisting of:
+
+- Vector Index
+- Metadata Store
+- Metadata Index
+
+The vector index supports approximate nearest-neighbor retrieval.
+
+Each document chunk contains:
+
+- Embedding
+- Original Text
+- Metadata
+
+Metadata can include:
+
+- source
+- document type
+- section
+- date
+- entity
+
+Metadata filtering is applied before or during similarity search.
+
+### Document Processing Pipeline
+
+```text
+Company Documents
+      |
+      v
+Document Chunking
+      |
+      v
+Embeddings
+      |
+      v
 Vector Database
+      |
+      +---- Vector Index
+      +---- Metadata Store
+      +---- Metadata Index
+```
 
-The RAG system uses a vector database for semantic retrieval.
+The retrieval corpus contains company knowledge such as:
 
-Each indexed document chunk contains:
+- Refund policies
+- Cancellation policies
+- VIP benefits
+- Travel voucher rules
+- Compensation policies
+- Airport information
+- Customer support policies
 
+---
+
+## RAG Architectures
+
+Three retrieval architectures are implemented.
+
+### Naive RAG
+
+```text
+Query
+  |
 Embedding
-Original Text
-Metadata
+  |
+Vector Search
+  |
+Retrieved Chunks
+  |
+LLM
+  |
+Answer
+```
 
-Metadata may include:
+Naive RAG provides the baseline retrieval architecture.
 
-source
-document type
-section
-date
-entity
+### Hybrid Search
 
-The vector index supports similarity-based retrieval and metadata filtering.
+Hybrid Search combines:
 
-Document Processing Pipeline
+```text
+Semantic Vector Search
+        +
+Keyword / BM25 Search
+        |
+        v
+Merged Ranking
+        |
+        v
+Retrieved Context
+```
 
-flowchart TD
-    D[Company Documents] --> C[Document Chunking]
-    C --> E[Embeddings]
-    E --> V[Vector Database]
+This improves retrieval for exact identifiers such as:
 
-    V --> VI[Vector Index]
-    V --> MS[Metadata Store]
-    V --> MI[Metadata Index]
+- Booking codes
+- Flight numbers
+- Policy names
+- Error codes
+- Exact business terms
 
-The knowledge base contains company information such as:
+### Agentic RAG
 
-Refund policies
+Agentic RAG allows the agent to decide:
 
-Cancellation policies
+- What should be retrieved
+- Whether retrieval is necessary
+- Whether another retrieval is required
+- Whether the retrieved information is sufficient
 
-VIP benefits
+```text
+Question
+   |
+   v
+Agent Reasoning
+   |
+   v
+Retrieve
+   |
+   v
+Observe Results
+   |
+   +---- Sufficient ----> Generate
+   |
+   +---- Insufficient --> Retrieve Again
+```
 
-Travel voucher rules
+---
 
-Compensation policies
+## Retrieval Evaluation
 
-Airport information
+All retrieval architectures are evaluated using the same domain-specific question set.
 
-Customer support policies
+The evaluation measures:
 
-RAG Architectures
+- Accuracy
+- Token usage per query
+- Latency per query
 
-Naive RAG
+The test set contains:
 
-flowchart LR
-    Q[Query] --> E[Embedding]
-    E --> VS[Vector Search]
-    VS --> C[Retrieved Chunks]
-    C --> LLM[LLM]
-    LLM --> A[Answer]
+- General policy questions
+- Exact identifier questions
+- Multi-part questions
+- Questions requiring multiple retrieval steps
 
-Naive RAG provides the baseline retrieval approach.
+The final retrieval architecture is selected based on measured performance and the actual query patterns of WanderPath Travel Agency.
 
-Hybrid Search
+---
 
-Hybrid Search combines semantic and keyword retrieval.
+## Self-RAG-Style Verification
 
-flowchart TD
-    Q[Query] --> V[Semantic Vector Search]
-    Q --> K[Keyword / BM25 Search]
+The system performs explicit verification before returning an answer.
 
-    V --> M[Merged Ranking]
-    K --> M
+### Retrieval Relevance
 
-    M --> C[Retrieved Context]
+```text
+Retrieved Context
+       |
+       v
+Is the context relevant?
+       |
+   +---+---+
+   |       |
+  Yes      No
+   |       |
+   v       v
+Generate  Reject / Retry
+```
 
-This is useful for exact information such as:
+### Answer Support
 
-Booking codes
+```text
+Generated Answer
+       |
+       v
+Is the answer supported by retrieved evidence?
+       |
+   +---+---+
+   |       |
+  Yes      No
+   |       |
+   v       v
+Return   Reject / Regenerate
+```
 
-Flight numbers
+Self-RAG-style verification is applied to both:
 
-Policy names
+- RAG retrieval
+- Long-term memory retrieval
 
-Exact business terms
+This prevents unsupported information from being presented as a trusted answer.
 
-Agentic RAG
+---
 
-Agentic RAG allows the agent to determine:
+## Agent Integration
 
-Whether retrieval is needed
+The memory and retrieval systems are part of the live agent loop.
 
-What information should be retrieved
-
-Whether another retrieval step is required
-
-Whether the retrieved context is sufficient
-
-flowchart TD
-    Q[Question] --> AR[Agent Reasoning]
-    AR --> R[Retrieve]
-    R --> O[Observe Results]
-
-    O -->|Sufficient| G[Generate]
-    O -->|Insufficient| R
-
-Retrieval Evaluation
-
-The retrieval architectures are evaluated using the same domain-specific question set.
-
-Evaluation metrics include:
-
-Accuracy
-
-Token usage per query
-
-Latency per query
-
-The test set includes:
-
-General policy questions
-
-Exact identifier questions
-
-Multi-part questions
-
-Questions requiring multiple retrieval steps
-
-The final retrieval architecture is selected according to retrieval quality and measured performance.
-
+```text
+User Message
+     |
+     v
+Short-Term Memory
+     |
+     +---- Scratchpad
+     |
+     +---- MemoryItem
+              |
+              v
+        Promote-or-Drop
+              |
+        +-----+-----+
+        |           |
+       DROP       EPISODIC
+                    |
+                    v
+              Consolidation
+                    |
+                    v
+              Semantic Memory
+     
+     +----------------------+
+     |
+     v
+Context Management
+     |
+     v
+Memory + RAG Retrieval
+     |
+     v
 Self-RAG Verification
+     |
+     v
+Agent Reasoning
+     |
+     v
+MCP Tools
+     |
+     v
+Final Answer
+```
 
-The system verifies retrieval results and generated answers before returning them.
+The existing MCP Server and MySQL database remain the source of live company data.
 
-Retrieval Relevance
+---
 
-flowchart TD
-    C[Retrieved Context] --> R{Is the context relevant?}
+## End-to-End Workflow
 
-    R -->|Yes| G[Generate]
-    R -->|No| X[Reject / Retry]
+```text
+Conversation
+    |
+    v
+Short-Term Memory
+    |
+    v
+Context Management
+    |
+    v
+Promote-or-Drop Router
+    |
+    +---- DROP
+    |
+    +---- PROMOTE
+             |
+             v
+        Episodic Memory
+             |
+             v
+       Consolidation Layer
+             |
+             v
+       Semantic Memory
+             |
+             v
+      Memory Retrieval
+             |
+             +----------------+
+                              |
+                              v
+                         RAG Retrieval
+                              |
+                              v
+                    Self-RAG Verification
+                              |
+                              v
+                         AI Agent
+                              |
+                              v
+                         MCP Tools
+                              |
+                              v
+                         User Answer
+```
 
-Answer Support
+---
 
-flowchart TD
-    A[Generated Answer] --> S{Is the answer supported by evidence?}
-
-    S -->|Yes| R[Return]
-    S -->|No| G[Reject / Regenerate]
-
-This reduces unsupported or ungrounded answers.
-
-Self-RAG-style verification is applied to both retrieved company knowledge and long-term customer memory.
-
-Agent Integration
-
-Memory and retrieval are integrated directly into the live agent loop.
-
-flowchart TD
-    U[User Message] --> STM[Short-Term Memory]
-
-    STM --> SP[Scratchpad]
-    STM --> MI[MemoryItem]
-
-    MI --> R[Promote-or-Drop Router]
-
-    R -->|DROP| D[Forget]
-    R -->|PROMOTE| E[Episodic Memory]
-
-    E --> C[Consolidation]
-    C --> SM[Semantic Memory]
-    SM --> MR[Memory Retrieval]
-
-    STM --> CM[Context Management]
-
-    CM --> CTX[Agent Context]
-    MR --> CTX
-    RAG[RAG Retrieval] --> CTX
-
-    CTX --> SR[Self-RAG Verification]
-    SR --> AR[Agent Reasoning]
-    AR --> MCP[MCP Tools]
-    MCP --> FA[Final Answer]
-
-The existing MCP Server and MySQL database remain responsible for live company data and business operations.
-
-End-to-End Workflow
-
-flowchart TD
-    C[Conversation] --> STM[Short-Term Memory]
-    STM --> CM[Context Management]
-    CM --> R[Promote-or-Drop Router]
-
-    R -->|DROP| D[Forget]
-    R -->|PROMOTE| E[Episodic Memory]
-
-    E --> CL[Consolidation Layer]
-    CL --> SM[Semantic Memory]
-    SM --> MR[Memory Retrieval]
-
-    R2[RAG Retrieval] --> RC[Retrieved Context]
-    MR --> RC
-
-    RC --> SR[Self-RAG Verification]
-    SR --> A[AI Agent]
-    A --> MCP[MCP Tools]
-    MCP --> UA[User Answer]
-
-Testing
+## Testing
 
 The project includes tests for:
 
-Short-Term Memory
-
-Scratchpad persistence
-
-High-stakes fact extraction
-
-MemoryItem creation
-
-Promote-or-Drop routing
-
-Episodic Memory
-
-Semantic Memory
-
-Consolidation
-
-Fact versioning
-
-Conflict resolution
-
-Context window strategies
-
-Vector retrieval
-
-Naive RAG
-
-Hybrid Search
-
-Agentic RAG
-
-Self-RAG verification
-
-End-to-end agent integration
+- Short-term memory
+- Scratchpad persistence
+- High-stakes fact extraction
+- MemoryItem creation
+- Promote-or-Drop routing
+- Episodic memory
+- Semantic memory
+- Consolidation
+- Fact versioning
+- Conflict resolution
+- Context window strategies
+- Vector retrieval
+- Naive RAG
+- Hybrid Search
+- Agentic RAG
+- Self-RAG verification
+- End-to-end agent integration
 
 Run the tests with:
 
+```bash
 python -m pytest
+```
 
-Running the Project
+---
 
-1. Clone the Repository
+## Running the Project
 
+### 1. Clone the Repository
+
+```bash
 git clone <repository-url>
 cd WanderPathA
+```
 
-2. Install Dependencies
+### 2. Install Dependencies
 
+```bash
 pip install -r requirements.txt
+```
 
-3. Configure Environment Variables
+### 3. Configure Environment Variables
 
-Create a .env file:
+Create a `.env` file:
 
+```env
 DB_HOST=localhost
 DB_USER=your_username
 DB_PASSWORD=your_password
 DB_NAME=travel_agency
 GROQ_API_KEY=your_api_key
+```
 
-Never commit .env or API keys to GitHub.
+> Never commit `.env` or API keys to GitHub.
 
-Database Setup
+### 4. Database Setup
 
-Initialize the WanderPath database:
+Initialize the existing WanderPath database:
 
+```bash
 mysql < db/schema.sql
 mysql < db/data.sql
+```
 
 The project reuses the existing database and MCP infrastructure.
 
-Run the MCP Server
+### 5. Run the MCP Server
 
+```bash
 python server/server.py
+```
 
-Run the Agent
+### 6. Run the Agent
 
+```bash
 python agent/agent.py
+```
 
-Technologies
+---
 
-Python
+## Technologies
 
-MySQL
+- Python
+- MySQL
+- Model Context Protocol (MCP)
+- LangChain
+- Groq
+- Llama 3.3 70B
+- Pydantic
+- Vector Database
+- BM25
+- RAG
+- Agentic RAG
+- Self-RAG-style Verification
+- Embeddings
+- Approximate Nearest Neighbor Search
 
-Model Context Protocol (MCP)
+---
 
-LangChain
+## Security and Safety
 
-Groq
+The project follows the original MCP security architecture:
 
-Llama 3.3 70B
+- No direct database access from the LLM
+- Server-side validation
+- Authorization checks
+- Controlled MCP tools
+- No raw SQL generated by the model
+- Environment variables for secrets
+- No committed API keys
+- Grounded RAG responses
+- Verification of retrieved evidence
+- Explicit memory routing
+- Versioned semantic facts
 
-Pydantic
+---
 
-Embeddings
+## Key Design Principles
 
-Vector Database
+- Short-term memory and scratchpad are separate.
+- Context pruning must never destroy the scratchpad.
+- The Router only decides between forgetting and episodic promotion.
+- The Router never writes directly to Semantic Memory.
+- Semantic Memory is created through periodic consolidation.
+- Contradictory facts are versioned instead of silently overwritten.
+- RAG answers must be grounded in retrieved information.
+- Retrieval quality is evaluated using real test questions.
+- Multiple retrieval architectures are compared before selecting the final approach.
+- The existing MCP Server and database are reused rather than duplicated.
 
-BM25
+---
 
+## Project Result
+
+The final system transforms WanderPath from an MCP-only travel support agent into a memory-aware and knowledge-grounded agent.
+
+It can now:
+
+- Maintain short-term conversational state
+- Preserve important customer information
+- Forget irrelevant information
+- Promote valuable memories to episodic memory
+- Consolidate episodes into semantic facts
+- Handle changing and conflicting customer facts
+- Retrieve relevant long-term memories
+- Search company knowledge using vector and keyword retrieval
+- Perform Naive, Hybrid, and Agentic RAG
+- Verify retrieved evidence before answering
+- Continue using the existing MCP tools and database
+
+```text
+WanderPath MCP Agent
+        +
+Short-Term Memory
+        +
+Long-Term Memory
+        +
+Vector Retrieval
+        +
 RAG
-
-Agentic RAG
-
+        +
 Self-RAG Verification
-
-Approximate Nearest Neighbor Search
-
-Security and Safety
-
-The project maintains the security architecture of the original MCP Server.
-
-No direct database access from the LLM
-
-Server-side validation
-
-Authorization checks
-
-Controlled MCP tools
-
-No raw SQL generated by the model
-
-Environment variables for secrets
-
-No committed API keys
-
-Grounded RAG responses
-
-Evidence verification
-
-Explicit memory routing
-
-Versioned semantic facts
-
-Key Design Principles
-
-Short-Term Memory and Scratchpad are separate.
-
-Context pruning must never destroy the scratchpad.
-
-The Router decides between forgetting and episodic promotion.
-
-The Router does not write directly to Semantic Memory.
-
-Semantic Memory is created through consolidation.
-
-Contradictory facts are versioned instead of silently overwritten.
-
-RAG answers are grounded in retrieved information.
-
-Retrieval quality is evaluated using domain-specific questions.
-
-Multiple retrieval architectures are evaluated.
-
-The existing MCP Server and database are reused.
-
-Project Result
-
-The final system transforms WanderPath from an MCP-based travel support agent into a memory-aware and knowledge-grounded travel agent.
-
-It can:
-
-Maintain short-term conversational state
-
-Preserve important customer information
-
-Forget irrelevant information
-
-Promote valuable memories to Episodic Memory
-
-Consolidate episodes into Semantic Memory
-
-Handle changing customer facts
-
-Retrieve relevant long-term memories
-
-Search company knowledge using semantic and keyword retrieval
-
-Perform Naive, Hybrid, and Agentic RAG
-
-Verify retrieved evidence before answering
-
-Continue using the existing MCP tools and database
-
-flowchart LR
-    A[WanderPath MCP Agent]
-    B[Short-Term Memory]
-    C[Long-Term Memory]
-    D[Vector Retrieval]
-    E[RAG]
-    F[Self-RAG Verification]
-    G[Grounded Memory-Aware Travel Agent]
-
-    A --> B
-    B --> C
-    C --> D
-    D --> E
-    E --> F
-    F --> G
+        =
+Grounded Memory-Aware Travel Agent
+```
