@@ -2,8 +2,8 @@ import re
 import uuid
 from datetime import datetime
 
-from memory.memory_models import MemoryItem
-from memory.short_term_memory import ShortTermMemory
+from memory.memory_models import MemoryItem, SemanticFact
+from memory.Short_term_memory import ShortTermMemory
 
 _RULES: list[tuple[re.Pattern, str | None]] = [
     (
@@ -15,7 +15,7 @@ _RULES: list[tuple[re.Pattern, str | None]] = [
             r"(?:budget|maximum|max)[^.\n]{0,20}?(\d[\d,]{2,})\s*(egp|usd|\$|le)?",
             re.I,
         ),
-        None,  # dynamic fact text built from the match, see below
+        None,  # dynamic fact text built from the match
     ),
     (
         re.compile(
@@ -42,6 +42,54 @@ _RULES: list[tuple[re.Pattern, str | None]] = [
 ]
 
 
+class FactExtractorLLM:
+    """LLM extractor used by ConsolidationLayer to resolve episodic memories into semantic facts."""
+
+    def __init__(self, model_name: str = "llama-3.3-70b-versatile"):
+        self.model_name = model_name
+
+    def extract_fact(self, episode) -> SemanticFact | None:
+        try:
+            from langchain.chat_models import init_chat_model
+            from pydantic import BaseModel
+
+            class ExtractedFact(BaseModel):
+                has_fact: bool
+                predicate: str = ""
+                value: str = ""
+
+            model = init_chat_model(
+                model=self.model_name,
+                model_provider="groq",
+                max_tokens=128,
+                max_retries=1,
+            ).with_structured_output(ExtractedFact)
+
+            content = getattr(episode, "content", str(episode))
+            result = model.invoke(
+                [
+                    (
+                        "system",
+                        "Extract key persistent customer facts (e.g., seat_preference: window, max_budget: 15000 EGP) "
+                        "from the episode. If no key fact exists, set has_fact to false.",
+                    ),
+                    ("user", content),
+                ]
+            )
+
+            if result.has_fact and result.predicate and result.value:
+                return SemanticFact(
+                    predicate=result.predicate.strip().lower(),
+                    value=result.value.strip().lower(),
+                    entity_type=getattr(episode, "entity_type", "customer"),
+                    entity_id=getattr(episode, "entity_id", "CUST-101"),
+                    confidence=0.85,
+                )
+            return None
+        except Exception:
+            return None
+
+
 def _extract_rule_facts(text: str) -> list[str]:
     facts: list[str] = []
 
@@ -54,8 +102,6 @@ def _extract_rule_facts(text: str) -> list[str]:
             facts.append(static_fact)
             continue
 
-        # Dynamic facts: build a readable sentence from what was matched
-        # instead of storing the raw regex groups.
         if "budget" in pattern.pattern or "maximum" in pattern.pattern:
             amount = match.group(1)
             currency = match.group(2) or ""
@@ -70,10 +116,6 @@ def _extract_rule_facts(text: str) -> list[str]:
 
 
 def _extract_llm_fact(user_input: str) -> str | None:
-    """LLM fallback: only called when no rule matched. Best-effort — if the
-    model/API isn't available, this quietly returns None rather than
-    breaking the agent turn.
-    """
     try:
         from langchain.chat_models import init_chat_model
         from pydantic import BaseModel
@@ -113,11 +155,6 @@ def _extract_llm_fact(user_input: str) -> str | None:
 
 
 def _make_memory_item(fact: str, turn: int, source: str) -> MemoryItem:
-    """Build a MemoryItem matching memory/memory_models.py exactly, since
-    PromoteOrDropRouter (memory/router.py) consumes this type directly.
-    Rule-matched facts are deterministic, so they get a higher importance
-    than the LLM fallback's best-effort extraction.
-    """
     return MemoryItem(
         id=str(uuid.uuid4()),
         content=fact,
@@ -129,22 +166,6 @@ def _make_memory_item(fact: str, turn: int, source: str) -> MemoryItem:
 
 
 def process_customer_message(memory: ShortTermMemory, user_input: str, turn: int) -> None:
-    """Detect and pin any high-stakes fact in this customer message.
-
-    Rules run first; the LLM fallback only runs if the rules find nothing,
-    so a normal turn ("yes that's fine", "ok thanks") never costs a model
-    call.
-
-    Every pinned fact is recorded twice, for two different consumers:
-    - ``memory.scratchpad.pin(...)`` — read straight back into the
-      prompt every step (see ``render_scratchpad_for_prompt``), so the
-      agent itself never loses it.
-    - ``memory.add_item(...)`` — a MemoryItem queued for
-      PromoteOrDropRouter to later decide forget vs. promote-to-episodic
-      on. These are independent: the router removing an item from
-      ``memory.items`` does not, and must not, erase it from the
-      scratchpad the agent is actively relying on.
-    """
     rule_facts = _extract_rule_facts(user_input)
 
     if rule_facts:

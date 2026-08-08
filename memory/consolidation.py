@@ -22,7 +22,7 @@ SemanticFact     llm_extract()
 '''
 
 from memory.memory_models import Episode, SemanticFact
-from memory.fact_extractor_llm import FactExtractorLLM
+from memory.Fact_extraction import FactExtractorLLM
 
 
 class ConsolidationLayer:
