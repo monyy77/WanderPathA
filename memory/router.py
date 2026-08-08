@@ -5,24 +5,32 @@ class Decision(Enum):
     PROMOTE = "PROMOTE"
     DROP = "DROP"
 
-GREETINGS = ["hello", "hi", "hey",
-            "goodbye", "bye", "thanks", "thank you"]
+GREETINGS = [
+    "hello", "hi", "hey",
+    "goodbye", "bye", "thanks", "thank you"
+]
 
-PREFERENCES = ["prefer", "preference",
-               "window seat", "aisle seat",
-               "vegetarian", "vegan"]
+PREFERENCES = [
+    "prefer", "preference",
+    "window seat", "aisle seat",
+    "vegetarian", "vegan",
+    "wheelchair", "accessibility", "mobility",
+    "budget", "maximum budget", "max budget",
+    "passport", "voucher"
+]
 
 BOOKING_EVENTS = ["booking created", "booking confirmed", "reservation confirmed"]
 
 REFUND_EVENTS = ["refund requested", "refund approved", "refund"]
 
-CANCELLATION_EVENTS = ["booking cancelled","booking canceled","cancel reservation"]
+CANCELLATION_EVENTS = ["booking cancelled", "booking canceled", "cancel reservation"]
 
 PROFILE_UPDATE_EVENTS = ["profile updated", "profile changed", "update profile"]
 
+
 class PromoteOrDropRouter:
 
-    def __init__(self,episodic_store,short_term,llm=None,logger=None):
+    def __init__(self, episodic_store, short_term, llm=None, logger=None):
         self.episodic_store = episodic_store
         self.short_term = short_term
         self.llm = llm
@@ -48,7 +56,6 @@ class PromoteOrDropRouter:
             self.promote_to_episode(item, reason)
         elif decision == Decision.DROP:
             self.short_term.remove(item)
-        
 
     def decide(self, item: MemoryItem):
         decision, reason = self.rule_based(item)
@@ -56,7 +63,6 @@ class PromoteOrDropRouter:
             return decision, reason
         else:
             return self.llm_decision(item)
-
 
     def rule_based(self, item: MemoryItem):
         decision = None
@@ -68,10 +74,10 @@ class PromoteOrDropRouter:
             decision = Decision.DROP
             reason = "Temporary conversation"
 
-        # Customer preference
+        # High-Stakes Customer Preferences & Constraints
         elif any(word in content for word in PREFERENCES):
             decision = Decision.PROMOTE
-            reason = "Long-term preference"
+            reason = "Long-term preference / constraint"
 
         # Booking creation
         elif any(word in content for word in BOOKING_EVENTS):
@@ -96,7 +102,6 @@ class PromoteOrDropRouter:
         return decision, reason
 
     def llm_decision(self, item: MemoryItem):
-
         if self.llm is not None:
             return self.llm.make_decision(item)
 
@@ -104,13 +109,12 @@ class PromoteOrDropRouter:
             Decision.DROP,
             "No LLM available"
         )
-    #use this function to build an episode from a memory item
+
     def build_episode(
         self,
         item: MemoryItem,
         reason: str
     ):
-
         return Episode(
             content=item.content,
             entity_type=item.metadata.get("entity_type", "customer"),
@@ -121,68 +125,11 @@ class PromoteOrDropRouter:
             metadata=item.metadata.copy()
         )
 
-        episode.created_at = item.timestamp
-
-        return episode
-
     def promote_to_episode(
         self,
         item: MemoryItem,
         reason: str
     ):
-
         episode = self.build_episode(item, reason)
-
         self.episodic_store.save(episode)
-
         self.short_term.remove(item)
-
-
-'''
-
-MemoryItem
-      │
-      ▼
-decide(item)
-      │
-      ▼
-Decision + Reason
-      │
-      ▼
-promote(item, reason)
-      │
-      ▼
-Episode(reason=reason)
-      │
-      ▼
-episodic_store.save()
-
-'''
-
-
-'''
-Short-term Memory
-        │
-        ▼
- old_items
-        │
-        ▼
-PromoteOrDropRouter
-        │
-        ├─────────────┐
-        │             │
-        ▼             ▼
-     DROP         PROMOTE
-        │             │
-        ▼             ▼
- remove()      build_episode()
-                      │
-                      ▼
-              episodic_store.save()
-                      │
-                      ▼
-           Consolidation Layer
-                      │
-                      ▼
-          Semantic Memory (Facts)
-'''
