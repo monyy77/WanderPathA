@@ -1,352 +1,851 @@
-# WanderPath Travel Agency – MCP Server Lab
+WanderPath Travel Agency – Memory & RAG Lab
 
-## Team Members
+Team Members
 
-- Menna Sobhe
-- Moun Reda
-- Abdelrahman Eslam
+Menna Sobhe
 
----
+Moun Reda
 
-# Company
+Diana Emil
 
-**WanderPath Travel Agency**
+Company
 
-## Industry
+WanderPath Travel Agency
+
+Industry
 
 Travel & Tourism
 
----
+Project Overview
 
-# Project Overview
+This project extends the existing WanderPath Travel Agency MCP Server by adding a complete Memory and RAG architecture.
 
-This project implements a secure **Model Context Protocol (MCP) Server** for a travel agency. Instead of allowing an AI assistant to access the company database directly, the MCP Server exposes controlled tools, resources, and prompts while enforcing validation, authorization, and business rules.
+The system enables the travel support agent to maintain short-term and long-term customer memory while retrieving grounded company knowledge when needed.
 
-The project demonstrates how an MCP-compliant server can safely connect Large Language Models (LLMs) with enterprise data.
+The project includes:
 
----
+Short-Term Memory
 
-# Problem Statement
+Scratchpad
 
-WanderPath Travel Agency handles customer requests related to:
+Context Window Management
 
-- Flight bookings
-- Flight delays
-- Cancellations
-- Refund requests
-- Rebooking
-- Customer support escalations
+Promote-or-Drop Router
 
-Traditionally, employees search multiple systems manually to retrieve this information. Giving an AI assistant direct database access would introduce serious security and authorization risks.
+Router LLM
 
-The goal of this project is to build a secure MCP Server that allows an AI Agent to access company data safely through controlled interfaces instead of executing raw database queries.
+Episodic Memory
 
----
+Semantic Memory
 
-# Why MCP?
+Memory Consolidation
 
-Model Context Protocol provides a standardized and secure communication layer between AI models and enterprise systems.
+Fact Extraction LLM
 
-Instead of exposing the database directly, the MCP Server:
+Vector Database
 
-- Controls tool access
-- Validates every request
-- Enforces authorization rules
-- Exposes reusable resources
-- Provides reusable prompts
-- Supports runtime protocol features
+Naive RAG
 
-This makes the system safer, more maintainable, and easier to extend.
+Hybrid Search
 
----
+Agentic RAG
 
-# Project Structure
+Self-RAG Verification
 
-```text
+End-to-End Agent Integration
+
+The existing MCP Server and MySQL database are reused as the foundation of the system.
+
+Problem Statement
+
+Travel support conversations may contain large amounts of information, including:
+
+Booking details
+
+Flight information
+
+Customer profiles
+
+Refunds
+
+Cancellations
+
+Rebooking options
+
+Company policies
+
+Tool outputs
+
+Keeping the entire conversation in the context window increases token usage and may cause important information to be lost.
+
+The agent also needs access to company knowledge that is not directly available through MCP tools.
+
+The goal is to provide the agent with:
+
+Long-term memory of important customer information.
+
+Grounded retrieval of company knowledge.
+
+Overall Architecture
+
+flowchart TD
+    U[User] --> A[Travel Support Agent]
+
+    A --> STM[Short-Term Memory]
+    A --> RAG[RAG Retrieval]
+
+    STM --> M[Messages]
+    STM --> S[Scratchpad]
+    STM --> C[Context Management]
+
+    C --> R[Promote-or-Drop Router]
+
+    R -->|DROP| D[Forget]
+    R -->|PROMOTE| E[Episodic Memory]
+
+    E --> CON[Consolidation Layer]
+    CON --> SEM[Semantic Memory]
+    SEM --> MR[Long-Term Memory Retrieval]
+
+    RAG --> VS[Vector Search]
+    RAG --> KS[Keyword / BM25 Search]
+    RAG --> AR[Agentic RAG]
+
+    VS --> RC[Retrieved Context]
+    KS --> RC
+    AR --> RC
+    MR --> RC
+
+    RC --> SR[Self-RAG Verification]
+    SR --> FA[Final Answer]
+
+Project Structure
+
 .
 ├── README.md
-├── main.py
 ├── requirements.txt
-├── pyproject.toml
-├── uv.lock
+├── .env
+├── .env.example
 ├── .gitignore
-├── .python-version
-├── __init__.py
 │
 ├── agent/
-│   ├── __init__.py
-│   ├── README.md
 │   ├── agent.py
-│   ├── integration.py
 │   ├── schema.py
-│   ├── archive/
-│   ├── routing/
-│   └── unconstrained_react/
+│   └── ...
 │
-├── client/
-│   └── client.py
+├── memory/
+│   ├── short_term_memory.py
+│   ├── scratchpad.py
+│   ├── memory_models.py
+│   ├── memory_item_factory.py
+│   ├── metadata_builder.py
+│   ├── router.py
+│   ├── episodic_memory.py
+│   ├── semantic_memory.py
+│   ├── consolidation.py
+│   ├── fact_extractor_llm.py
+│   └── ...
 │
-├── db/
-│   ├── schema.sql
-│   ├── data.sql
-│   └── erd.png
+├── context_eval/
+│   ├── context_strategies.py
+│   └── ...
 │
-├── server/
-│   ├── __init__.py
-│   ├── README.md
-│   └── server.py
+├── rag/
+│   ├── chunking.py
+│   ├── embeddings.py
+│   ├── vector_store.py
+│   ├── naive_rag.py
+│   ├── hybrid_rag.py
+│   ├── agentic_rag.py
+│   ├── self_rag.py
+│   └── ...
 │
-├── shared/
-│   ├── data/
-│   ├── authorization.py
-│   ├── database.py
-│   ├── prompts.py
-│   ├── resources.py
-│   ├── validation.py
-│   └── tricky_inputs.json
+├── retrieval_eval/
+│   ├── test_questions.py
+│   ├── evaluation.py
+│   └── ...
 │
-└── tools/
-    ├── __init__.py
-    ├── booking_tools.py
-    ├── customer_tools.py
-    ├── escalation_tools.py
-    ├── finance_and_decision_tools.py
-    ├── travel_status_tools.py
-    └── utilties.py
-```
+├── mcp_server/
+│   └── ...
+│
+└── db/
+    ├── schema.sql
+    ├── data.sql
+    └── erd.png
 
----
+Short-Term Memory
 
-# Database Design
+Short-Term Memory contains three separate structures.
 
-The project uses a **MySQL relational database**.
+Message Buffer
 
-Main tables include:
+Stores the rolling conversation transcript.
 
-- Airports
-- Flights
-- Customers
-- Bookings
-- Employees
-- Refunds
-- Escalations
+Scratchpad
 
-The ERD represents all entity relationships and foreign-key constraints used throughout the system.
+Stores information that must survive context pruning:
 
----
+Current plan
 
-# MCP Server Features
+Current sub-goal
 
-The MCP Server provides secure access to company data through:
+Working state
 
-- Tools
-- Resources
-- Prompts
-- Validation
-- Authorization
+High-stakes customer facts
 
-The AI Agent never communicates directly with the database.
+MemoryItem Queue
 
----
+Stores customer information waiting for the Promote-or-Drop Router.
 
-# Protocol Concerns
+flowchart TD
+    STM[Short-Term Memory] --> MB[Messages]
+    STM --> SP[Scratchpad]
+    STM --> MI[MemoryItem Queue]
 
-## Capability Negotiation
+The scratchpad is injected into the agent prompt after context pruning so important information is never removed by the context strategy.
 
-The server declares its supported capabilities during the initialization phase.
+Context Window Management
 
-The client checks these capabilities before attempting to use optional features.
+The system implements four context management strategies:
 
----
+Sliding Window
 
-## Notifications
+Observation / Tool Output Masking
 
-The available tool set changes dynamically according to the authenticated user's role.
+Recursive Summarization
 
-Whenever permissions change, the server sends **tools/list_changed** notifications.
+Zone-Based Pruning
 
----
+Long-context conversations are evaluated using:
 
-## Elicitation
+Task accuracy
 
-Sensitive write operations require explicit human confirmation before completion.
+Input tokens
 
-The server pauses execution until approval is received.
+Output tokens
 
----
+Latency
 
-## Resources
+The selected strategy is integrated into the live agent loop.
 
-Static company information is exposed as read-only resources instead of executable tools.
+Promote-or-Drop Router
+
+The router decides which MemoryItem should be retained.
+
+flowchart TD
+    MI[MemoryItem] --> RR[Rule-Based Router]
+
+    RR -->|PROMOTE| E[Episodic Memory]
+    RR -->|DROP| F[Forget]
+    RR -->|UNKNOWN| LLM[Router LLM]
+
+    LLM -->|PROMOTE| E
+    LLM -->|DROP| F
+
+Rules are evaluated first. The Router LLM is used only when the rules cannot determine the appropriate decision.
+
+The router returns either:
+
+PROMOTE + reason
+
+or:
+
+DROP + reason
+
+The router only makes the decision between:
+
+PROMOTE
+
+DROP
+
+It never writes directly to Semantic Memory.
+
+The routing reason is logged for traceability.
+
+Router LLM
+
+The Router LLM is responsible only for deciding whether a memory item should be retained.
+
+It is separate from the Fact Extractor LLM.
+
+Router LLM
+"What should I remember?"
+
+Fact Extractor LLM
+"What exactly is the persistent fact?"
+
+This separation keeps memory routing and semantic fact extraction as independent responsibilities.
+
+MemoryItem
+
+MemoryItem connects customer messages to the memory pipeline.
+
+MemoryItem(
+    id=...,
+    content=...,
+    speaker="customer",
+    timestamp=...,
+    importance=...,
+    metadata=...
+)
+
+Metadata can include:
+
+entity_type
+entity_id
+turn
+extraction_source
+
+A MemoryItem can be created from a customer message and placed into the Short-Term Memory queue for routing.
+
+Episodic Memory
+
+Important customer events are stored as Episode objects.
+
+Examples:
+
+Booking confirmations
+
+Booking cancellations
+
+Refund requests
+
+Customer preferences
+
+Profile updates
+
+Important travel events
+
+An episode contains:
+
+content
+entity_type
+entity_id
+source
+reason
+created_at
+metadata
+
+The routing reason is preserved so promotion decisions remain explainable.
+
+Semantic Memory
+
+Semantic Memory stores persistent facts extracted from episodic memories.
+
+Examples:
+
+seat_preference → window
+meal_preference → vegetarian
+refund_preference → voucher
+
+Semantic facts support:
+
+Versioning
+
+Expiration
+
+Validity periods
+
+Conflict resolution
+
+Entity-based retrieval
+
+Consolidation Layer
+
+The Router does not write directly to Semantic Memory.
+
+Instead, episodic memories are periodically consolidated.
+
+flowchart TD
+    E[Episodic Memory] --> C[Consolidation Layer]
+    C --> R[Rule-Based Fact Extraction]
+
+    R -->|Fact Found| SF[Semantic Fact]
+    R -->|No Fact| LLM[Fact Extractor LLM]
+
+    LLM --> SF
+    SF --> SM[Semantic Memory]
+
+The consolidation layer handles:
+
+New facts
+
+Updated facts
+
+Contradictory facts
+
+Fact versioning
+
+Expiration
+
+Historical validity
+
+When a fact changes, the previous version is closed and a new version is created.
+
+Fact Extractor LLM
+
+The Fact Extractor LLM is responsible for extracting persistent semantic information from an episode.
+
+It returns structured information containing:
+
+is_fact
+predicate
+value
+confidence
+
+For example:
+
+Customer prefers a window seat.
+        ↓
+predicate: seat_preference
+value: window
+confidence: 1.0
+
+Rule-based extraction is attempted first, with the LLM used as a fallback.
+
+High-Stakes Scratchpad Facts
+
+The scratchpad detects important customer information that must remain available during the current conversation.
 
 Examples include:
 
-- Refund Policy
-- Travel Policies
-- Airport Information
+Accessibility requirements
 
----
+Budget limits
 
-## Prompts
+Passport constraints
 
-Reusable prompt templates are provided for common business tasks such as:
+Refund preferences
 
-- Draft Refund Explanation
-- Customer Response
-- Escalation Summary
+Hard booking conditions
 
----
+The detection pipeline is:
 
-## Transport
+flowchart TD
+    M[Customer Message] --> R[Rules]
 
-The transport actually implemented in this project is **STDIO**.
+    R -->|Found| P1[Pin Fact]
+    R -->|Not Found| LLM[LLM]
+    LLM --> P2[Pin Fact]
 
-That choice matches the problem well because the AI agent and MCP server are meant to run locally during the lab, allowing direct process-to-process communication with no network exposure for sensitive travel data.
+Each extracted fact can also be converted into a MemoryItem so it can participate in the long-term memory pipeline.
 
-**Streamable HTTP** is still a valid future deployment path for remote access or multiple clients, but it is not the transport built in this version.
+Memory Retrieval
 
----
+Relevant semantic memories are retrieved for the current customer query.
 
-## Progress Tracking
+flowchart LR
+    Q[User Query] --> R[Semantic Memory Retrieval]
+    R --> F[Relevant Customer Facts]
+    F --> C[Agent Context]
 
-Long-running operations report execution progress to the client instead of blocking until completion.
+This allows the agent to use information remembered from previous interactions.
 
----
+Vector Database
 
-## Defensive Tool Design
+The RAG system uses a vector database for semantic retrieval.
 
-Every write tool includes:
+Each indexed document chunk contains:
 
-- JSON Schema validation
-- Server-side validation
-- Authorization checks
-- Business rule enforcement
+Embedding
+Original Text
+Metadata
 
-No tool executes raw SQL received from the model.
+Metadata may include:
 
----
+source
+document type
+section
+date
+entity
 
-# Agent Integration
+The vector index supports similarity-based retrieval and metadata filtering.
 
-The AI Agent communicates exclusively with the MCP Server.
+Document Processing Pipeline
 
-Workflow:
+flowchart TD
+    D[Company Documents] --> C[Document Chunking]
+    C --> E[Embeddings]
+    E --> V[Vector Database]
 
-```text
-User
- ↓
-AI Agent
- ↓
-MCP Server
- ↓
-MySQL Database
- ↓
-MCP Server
- ↓
-AI Agent
- ↓
-User
-```
+    V --> VI[Vector Index]
+    V --> MS[Metadata Store]
+    V --> MI[Metadata Index]
 
----
+The knowledge base contains company information such as:
 
-# Resources
+Refund policies
 
-The server exposes read-only resources including:
+Cancellation policies
 
-- Refund Policy
-- Travel Policies
-- Airport Status
+VIP benefits
 
----
+Travel voucher rules
 
-# Prompts
+Compensation policies
 
-Reusable prompts include:
+Airport information
 
-- Draft Refund Explanation
-- Generate Escalation Report
-- Customer Support Response
+Customer support policies
 
----
+RAG Architectures
 
-# Running the Project
+Naive RAG
 
-## 1. Configure Environment
+flowchart LR
+    Q[Query] --> E[Embedding]
+    E --> VS[Vector Search]
+    VS --> C[Retrieved Chunks]
+    C --> LLM[LLM]
+    LLM --> A[Answer]
 
-Create a `.env` file:
+Naive RAG provides the baseline retrieval approach.
 
-```env
+Hybrid Search
+
+Hybrid Search combines semantic and keyword retrieval.
+
+flowchart TD
+    Q[Query] --> V[Semantic Vector Search]
+    Q --> K[Keyword / BM25 Search]
+
+    V --> M[Merged Ranking]
+    K --> M
+
+    M --> C[Retrieved Context]
+
+This is useful for exact information such as:
+
+Booking codes
+
+Flight numbers
+
+Policy names
+
+Exact business terms
+
+Agentic RAG
+
+Agentic RAG allows the agent to determine:
+
+Whether retrieval is needed
+
+What information should be retrieved
+
+Whether another retrieval step is required
+
+Whether the retrieved context is sufficient
+
+flowchart TD
+    Q[Question] --> AR[Agent Reasoning]
+    AR --> R[Retrieve]
+    R --> O[Observe Results]
+
+    O -->|Sufficient| G[Generate]
+    O -->|Insufficient| R
+
+Retrieval Evaluation
+
+The retrieval architectures are evaluated using the same domain-specific question set.
+
+Evaluation metrics include:
+
+Accuracy
+
+Token usage per query
+
+Latency per query
+
+The test set includes:
+
+General policy questions
+
+Exact identifier questions
+
+Multi-part questions
+
+Questions requiring multiple retrieval steps
+
+The final retrieval architecture is selected according to retrieval quality and measured performance.
+
+Self-RAG Verification
+
+The system verifies retrieval results and generated answers before returning them.
+
+Retrieval Relevance
+
+flowchart TD
+    C[Retrieved Context] --> R{Is the context relevant?}
+
+    R -->|Yes| G[Generate]
+    R -->|No| X[Reject / Retry]
+
+Answer Support
+
+flowchart TD
+    A[Generated Answer] --> S{Is the answer supported by evidence?}
+
+    S -->|Yes| R[Return]
+    S -->|No| G[Reject / Regenerate]
+
+This reduces unsupported or ungrounded answers.
+
+Self-RAG-style verification is applied to both retrieved company knowledge and long-term customer memory.
+
+Agent Integration
+
+Memory and retrieval are integrated directly into the live agent loop.
+
+flowchart TD
+    U[User Message] --> STM[Short-Term Memory]
+
+    STM --> SP[Scratchpad]
+    STM --> MI[MemoryItem]
+
+    MI --> R[Promote-or-Drop Router]
+
+    R -->|DROP| D[Forget]
+    R -->|PROMOTE| E[Episodic Memory]
+
+    E --> C[Consolidation]
+    C --> SM[Semantic Memory]
+    SM --> MR[Memory Retrieval]
+
+    STM --> CM[Context Management]
+
+    CM --> CTX[Agent Context]
+    MR --> CTX
+    RAG[RAG Retrieval] --> CTX
+
+    CTX --> SR[Self-RAG Verification]
+    SR --> AR[Agent Reasoning]
+    AR --> MCP[MCP Tools]
+    MCP --> FA[Final Answer]
+
+The existing MCP Server and MySQL database remain responsible for live company data and business operations.
+
+End-to-End Workflow
+
+flowchart TD
+    C[Conversation] --> STM[Short-Term Memory]
+    STM --> CM[Context Management]
+    CM --> R[Promote-or-Drop Router]
+
+    R -->|DROP| D[Forget]
+    R -->|PROMOTE| E[Episodic Memory]
+
+    E --> CL[Consolidation Layer]
+    CL --> SM[Semantic Memory]
+    SM --> MR[Memory Retrieval]
+
+    R2[RAG Retrieval] --> RC[Retrieved Context]
+    MR --> RC
+
+    RC --> SR[Self-RAG Verification]
+    SR --> A[AI Agent]
+    A --> MCP[MCP Tools]
+    MCP --> UA[User Answer]
+
+Testing
+
+The project includes tests for:
+
+Short-Term Memory
+
+Scratchpad persistence
+
+High-stakes fact extraction
+
+MemoryItem creation
+
+Promote-or-Drop routing
+
+Episodic Memory
+
+Semantic Memory
+
+Consolidation
+
+Fact versioning
+
+Conflict resolution
+
+Context window strategies
+
+Vector retrieval
+
+Naive RAG
+
+Hybrid Search
+
+Agentic RAG
+
+Self-RAG verification
+
+End-to-end agent integration
+
+Run the tests with:
+
+python -m pytest
+
+Running the Project
+
+1. Clone the Repository
+
+git clone <repository-url>
+cd WanderPathA
+
+2. Install Dependencies
+
+pip install -r requirements.txt
+
+3. Configure Environment Variables
+
+Create a .env file:
+
 DB_HOST=localhost
 DB_USER=your_username
 DB_PASSWORD=your_password
 DB_NAME=travel_agency
-GOOGLE_API_KEY=your_api_key
-```
+GROQ_API_KEY=your_api_key
 
----
+Never commit .env or API keys to GitHub.
 
-## 2. Initialize Database
+Database Setup
 
-```bash
+Initialize the WanderPath database:
+
 mysql < db/schema.sql
 mysql < db/data.sql
-```
 
----
+The project reuses the existing database and MCP infrastructure.
 
-## 3. Run the MCP Server
+Run the MCP Server
 
-```bash
 python server/server.py
-```
 
----
+Run the Agent
 
-## 4. Run the AI Agent
+python agent/agent.py
 
-```bash
-python agent/client.py
-```
+Technologies
 
----
+Python
 
-# Technologies
+MySQL
 
-- Python
-- MySQL
-- Model Context Protocol (MCP)
-- LangChain
-- Google Gemini 2.5 Flash
-- JSON Schema
-- python-dotenv
+Model Context Protocol (MCP)
 
----
+LangChain
 
-# Security Features
+Groq
 
-- No direct database access
-- Server-side validation
-- Authorization checks
-- JSON Schema validation
-- Role-based permissions
-- Secure tool execution
+Llama 3.3 70B
 
----
+Pydantic
 
-# Future Improvements
+Embeddings
 
-- Streamable HTTP deployment
-- Live airline APIs
-- Real-time flight tracking
-- Multi-user authentication
-- Audit logging
-- Dashboard for monitoring MCP requests
+Vector Database
 
----
+BM25
 
-# test project
+RAG
 
-```bash
-python main.py
-```
+Agentic RAG
+
+Self-RAG Verification
+
+Approximate Nearest Neighbor Search
+
+Security and Safety
+
+The project maintains the security architecture of the original MCP Server.
+
+No direct database access from the LLM
+
+Server-side validation
+
+Authorization checks
+
+Controlled MCP tools
+
+No raw SQL generated by the model
+
+Environment variables for secrets
+
+No committed API keys
+
+Grounded RAG responses
+
+Evidence verification
+
+Explicit memory routing
+
+Versioned semantic facts
+
+Key Design Principles
+
+Short-Term Memory and Scratchpad are separate.
+
+Context pruning must never destroy the scratchpad.
+
+The Router decides between forgetting and episodic promotion.
+
+The Router does not write directly to Semantic Memory.
+
+Semantic Memory is created through consolidation.
+
+Contradictory facts are versioned instead of silently overwritten.
+
+RAG answers are grounded in retrieved information.
+
+Retrieval quality is evaluated using domain-specific questions.
+
+Multiple retrieval architectures are evaluated.
+
+The existing MCP Server and database are reused.
+
+Project Result
+
+The final system transforms WanderPath from an MCP-based travel support agent into a memory-aware and knowledge-grounded travel agent.
+
+It can:
+
+Maintain short-term conversational state
+
+Preserve important customer information
+
+Forget irrelevant information
+
+Promote valuable memories to Episodic Memory
+
+Consolidate episodes into Semantic Memory
+
+Handle changing customer facts
+
+Retrieve relevant long-term memories
+
+Search company knowledge using semantic and keyword retrieval
+
+Perform Naive, Hybrid, and Agentic RAG
+
+Verify retrieved evidence before answering
+
+Continue using the existing MCP tools and database
+
+flowchart LR
+    A[WanderPath MCP Agent]
+    B[Short-Term Memory]
+    C[Long-Term Memory]
+    D[Vector Retrieval]
+    E[RAG]
+    F[Self-RAG Verification]
+    G[Grounded Memory-Aware Travel Agent]
+
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    E --> F
+    F --> G
