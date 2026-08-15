@@ -21,17 +21,26 @@ from tools.travel_status_tools import (
     get_flight_status,
     get_weather,
     get_delay_duration,
-    check_disruption_reason
+    check_disruption_reason,
+    check_connection_risk,
+    get_disruption_severity,
+    check_alternative_transport,
 )
 from tools.booking_tools import (
     get_nearby_airports,
-    get_flight_options
+    get_flight_options,
+    get_bookings_by_flight,
 )
 from tools.customer_tools import (
     get_customer_profile,
     get_booking_history
 )
-from tools.finance_and_decision_tools import ProcessRefund, CalculateRefundAmount
+from tools.finance_and_decision_tools import (
+    ProcessRefund,
+    CalculateRefundAmount,
+    CalculateCompensation,
+)
+from tools.escalation_tools import escalate_to_human
 from shared.prompts import *
 from shared.resources import *
 
@@ -164,6 +173,19 @@ mcp.tool()(get_nearby_airports.func)
 mcp.tool()(get_flight_options.func)
 mcp.tool()(get_customer_profile.func)
 mcp.tool()(get_booking_history.func)
+
+# --- Registered for the Planning Agent (IROPS reshuffle) -------------------
+# These tools already existed in tools/*.py but were not yet wired onto the
+# server. Registering them, not rebuilding them, per the lab's "reuse the
+# existing server and tools" requirement. get_bookings_by_flight is the one
+# genuinely new tool: nothing previously covered "which bookings/customers
+# are on this disrupted flight".
+mcp.tool()(get_bookings_by_flight.func)
+mcp.tool()(check_connection_risk.func)
+mcp.tool()(get_disruption_severity.func)
+mcp.tool()(check_alternative_transport.func)
+mcp.tool()(CalculateCompensation.func)
+mcp.tool()(escalate_to_human.func)
 mcp.prompt()(refund_explanation)
 mcp.prompt()(explain_flight_delay)
 mcp.prompt()(travel_voucher_message)
