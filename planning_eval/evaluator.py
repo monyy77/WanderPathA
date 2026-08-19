@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+import asyncio
 import time
 from typing import Any
 
@@ -7,6 +7,7 @@ from planning.self_refine import self_refine
 from planning.reflexion import reflexion, ReflectionMemory
 from planning.plan_and_solve import PlanAndSolvePlanner
 from planning.tree_of_thoughts import TreeOfThoughtsPlanner
+from planning.lats import LATSPlanner
 
 
 METHODS = [
@@ -28,14 +29,27 @@ def get_output(result: Any) -> str:
     if isinstance(result, dict):
         return str(result.get("output", result))
 
-    return str(getattr(result, "output", result))
+    for attr in ("output", "revised", "final_answer"):
+        value = getattr(result, attr, None)
+        if value is not None:
+            return str(value)
+
+    return str(result)
 
 
 def get_success(result: Any) -> bool:
     if isinstance(result, dict):
         return bool(result.get("success", False))
 
-    return bool(getattr(result, "success", False))
+    # Self-Refine
+    if hasattr(result, "success"):
+        return bool(result.success)
+
+    # Reflexion
+    if hasattr(result, "successful"):
+        return bool(result.successful)
+
+    return False
 
 
 def get_metrics(result: Any) -> tuple[int, int]:
@@ -62,9 +76,9 @@ async def run_one(case, method: str, context: dict) -> dict:
         registry = context["registry"]
         environment = context["environment"]
 
-        # -----------------------------
-        # Decomposition First
-        # -----------------------------
+        # =========================================================
+        # DECOMPOSITION FIRST
+        # =========================================================
         if method == "decomposition_first":
 
             from planning.decomposition import (
@@ -79,7 +93,6 @@ async def run_one(case, method: str, context: dict) -> dict:
                 list(registry.tools.keys()),
             )
 
-            # Use Plan-and-Solve for "planned" DAG nodes.
             async def planner_executor(task, outputs, plan_goal):
                 planner = PlanAndSolvePlanner(llm, registry)
                 return await planner.run(
@@ -94,19 +107,19 @@ async def run_one(case, method: str, context: dict) -> dict:
                 planner_executor=planner_executor,
             )
 
+            output = final_output(plan, outputs)
+
             result = {
-                "success": bool(final_output(plan, outputs)),
-                "output": final_output(plan, outputs),
+                "success": bool(output),
+                "output": output,
             }
 
-        # -----------------------------
-        # Dynamic Decomposition
-        # -----------------------------
+        # =========================================================
+        # DYNAMIC
+        # =========================================================
         elif method == "dynamic":
 
-            from planning.dynamic_decomposition import (
-                dynamic_decomposition,
-            )
+            from planning.dynamic_decomposition import dynamic_decomposition
 
             history = await dynamic_decomposition(
                 goal,
@@ -122,9 +135,9 @@ async def run_one(case, method: str, context: dict) -> dict:
                 "llm_calls": len(history),
             }
 
-        # -----------------------------
-        # Plan and Solve
-        # -----------------------------
+        # =========================================================
+        # PLAN AND SOLVE
+        # =========================================================
         elif method == "plan_and_solve":
 
             planner = PlanAndSolvePlanner(
@@ -137,9 +150,9 @@ async def run_one(case, method: str, context: dict) -> dict:
                 goal,
             )
 
-        # -----------------------------
-        # Tree of Thoughts
-        # -----------------------------
+        # =========================================================
+        # TREE OF THOUGHTS
+        # =========================================================
         elif method == "tree_of_thoughts":
 
             planner = TreeOfThoughtsPlanner(
@@ -151,18 +164,42 @@ async def run_one(case, method: str, context: dict) -> dict:
                 case.id,
                 goal,
             )
-
         # -----------------------------
         # LATS
         # -----------------------------
         elif method == "lats":
 
-            from planning.lats import lats
+            from planning.lats import LATSPlanner
+            from planning.schema import LATSNode, PlannerResult, PlannerType
 
-            result = await lats(
-                goal,
-                llm,
-                environment,
+            planner = LATSPlanner(
+                llm=llm,
+                tool_registry=registry,
+                environment=environment,
+            )
+
+            root = LATSNode(
+                id="root",
+                thought=goal,
+            )
+
+            # IMPORTANT:
+            # Use only 1 iteration during benchmark.
+            # The original LATS.run() uses 5 iterations.
+            best_node = await planner.search(
+                root,
+                iterations=1,
+            )
+            result = PlannerResult(
+                success=best_node.reward > 0,
+                planner=PlannerType.LATS,
+                task_id=case.id,
+                output=str(best_node.execution_result),
+                metadata={
+                    "selected_node": best_node.id,
+                    "reward": best_node.reward,
+                    "feedback": best_node.feedback,
+                },
             )
 
         # -----------------------------
@@ -170,14 +207,42 @@ async def run_one(case, method: str, context: dict) -> dict:
         # -----------------------------
         elif method == "lats_ungrounded":
 
-            from planning.lats import lats
+            from planning.lats import LATSPlanner
 
-            result = await lats(
-                goal,
-                llm,
-                None,
+            # Ungrounded LATS:
+            # use a dummy environment that does not represent
+            # the real MCP environment.
+
+            class UngroundedEnvironment:
+
+                async def evaluate(
+                    self,
+                    candidate,
+                    task,
+                    execution_result=None,
+                    tool_name=None,
+                ):
+                    from planning.environment import EnvironmentFeedback
+
+                    return EnvironmentFeedback(
+                        success=execution_result is not None,
+                        score=1.0 if execution_result is not None else 0.0,
+                        details=[
+                            "Ungrounded evaluation: "
+                            "no real environment validation."
+                        ],
+                    )
+
+            planner = LATSPlanner(
+                llm=llm,
+                tool_registry=registry,
+                environment=UngroundedEnvironment(),
             )
 
+            result = await planner.run(
+                case.id,
+                goal,
+            )
         # -----------------------------
         # Self Refine
         # -----------------------------
@@ -185,7 +250,7 @@ async def run_one(case, method: str, context: dict) -> dict:
 
             result = await self_refine(
                 goal=goal,
-                draft="",
+                draft=goal,
                 llm=llm,
                 environment=environment,
             )
@@ -199,9 +264,9 @@ async def run_one(case, method: str, context: dict) -> dict:
                 goal=goal,
                 llm=llm,
                 environment=environment,
-                initial_draft="",
-                max_trials=3,
-                memory=ReflectionMemory(max_items=5),
+                initial_draft=goal,
+                max_trials=1,
+                memory=ReflectionMemory(),
             )
 
         else:
@@ -209,7 +274,6 @@ async def run_one(case, method: str, context: dict) -> dict:
 
         actual_success = get_success(result)
 
-        # For T5 expected_success=False.
         success = actual_success == case.expected_success
 
         llm_calls, tokens = get_metrics(result)
@@ -247,6 +311,7 @@ async def run_benchmark(
 ):
 
     methods = methods or METHODS
+
     results = []
 
     total = len(cases) * len(methods)
@@ -263,6 +328,7 @@ async def run_benchmark(
         for method in methods:
 
             count += 1
+
             print(
                 f"  [{count}/{total}] {method} ...",
                 end=" ",
@@ -287,6 +353,9 @@ async def run_benchmark(
                 print(
                     f"      {result['error']}"
                 )
+
+            # prevent immediate Mistral rate-limit bursts
+            await asyncio.sleep(20)
 
     print("\n" + "=" * 60)
     print("BENCHMARK DONE")

@@ -55,14 +55,12 @@ Think step by step and return only the structured response.
 """
 
 
-def build_structured_model(action_names):
-    step_model = build_agent_step_model(action_names)
+def build_structured_model(action_names=None):
     return init_chat_model(
         model="mistral-large-latest",
         temperature=0,
         max_retries=3,
-    ).with_structured_output(step_model)
-
+    )
 
 # =====================================================
 # BENCHMARK EXPORTS
