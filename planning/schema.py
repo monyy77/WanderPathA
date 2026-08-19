@@ -54,3 +54,20 @@ class PlannerResult(BaseModel):
     output: str
     tool_calls: list[dict[str, Any]] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
+class EnvironmentFeedback(BaseModel):
+    """
+    Grounded feedback produced by the external environment.
+
+    This object is intentionally independent from LLM reasoning.
+    """
+
+    success: bool
+
+    score: float = Field(
+        ge=0.0,
+        le=1.0,
+    )
+
+    details: list[str] = Field(
+        default_factory=list
+    )

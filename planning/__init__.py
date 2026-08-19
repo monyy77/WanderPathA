@@ -11,7 +11,7 @@ Plan/Task/TaskType or to unit-test dag.py in isolation.
 To run the agent: `from planning.planning_agent import run_planning_agent`.
 """
  
-from .dag import Plan, Task, TaskType
+from planning.dag import Plan, Task, TaskType
  
 __all__ = ["Plan", "Task", "TaskType"]
  

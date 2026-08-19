@@ -1,0 +1,118 @@
+{
+  "agent": "planning_agent (IROPS reshuffle)",
+  "mode": "decomposition_first",
+  "goal": "Handle the disruption of flight 2. Identify affected customers, check their priority, evaluate alternative transport or flights, and determine compensation.",
+  "model": "llama-3.1-8b-instant",
+  "plan": {
+    "goal": "Handle the disruption of flight 2. Identify affected customers, check their priority, evaluate alternative transport or flights, and determine compensation.",
+    "tasks": [
+      {
+        "id": "t1",
+        "instruction": "Get the current status of flight 2",
+        "depends_on": [],
+        "kind": "tool_call",
+        "tool_name": "get_flight_status"
+      },
+      {
+        "id": "t2",
+        "instruction": "Get the delay duration for flight 2",
+        "depends_on": [],
+        "kind": "tool_call",
+        "tool_name": "get_delay_duration"
+      },
+      {
+        "id": "t3",
+        "instruction": "Retrieve all bookings associated with flight 2",
+        "depends_on": [],
+        "kind": "tool_call",
+        "tool_name": "get_bookings_by_flight"
+      },
+      {
+        "id": "t4",
+        "instruction": "Fetch customer profiles for each affected booking to assess priority",
+        "depends_on": [
+          "t3"
+        ],
+        "kind": "tool_call",
+        "tool_name": "get_customer_profile"
+      },
+      {
+        "id": "t5",
+        "instruction": "Obtain alternative flight options for each affected passenger",
+        "depends_on": [
+          "t3"
+        ],
+        "kind": "tool_call",
+        "tool_name": "get_flight_options"
+      },
+      {
+        "id": "t6",
+        "instruction": "Check availability of alternative ground transport for affected passengers",
+        "depends_on": [
+          "t3"
+        ],
+        "kind": "tool_call",
+        "tool_name": "check_alternative_transport"
+      },
+      {
+        "id": "t7",
+        "instruction": "Calculate compensation amounts based on delay severity and passenger priority",
+        "depends_on": [
+          "t1",
+          "t2",
+          "t4"
+        ],
+        "kind": "tool_call",
+        "tool_name": "CalculateCompensation"
+      },
+      {
+        "id": "t8",
+        "instruction": "Create the final rebooking and compensation plan for all affected customers",
+        "depends_on": [
+          "t5",
+          "t6",
+          "t7"
+        ],
+        "kind": "planned",
+        "tool_name": null
+      }
+    ]
+  },
+  "execution_batches": [
+    [
+      "t1",
+      "t2",
+      "t3"
+    ],
+    [
+      "t4",
+      "t5",
+      "t6"
+    ],
+    [
+      "t7"
+    ],
+    [
+      "t8"
+    ]
+  ],
+  "outputs": {
+    "t1": "[{'type': 'text', 'text': '1 validation error for call[get_flight_status]\\nflight_id\\n  Missing required argument [type=missing_argument, input_value={}, input_type=dict]\\n    For further information visit https://errors.pydantic.dev/2.12/v/missing_argument', 'id': 'lc_c342d111-02c9-460b-928b-7e4d5d69ccba'}]",
+    "t2": "[{'type': 'text', 'text': '1 validation error for call[get_delay_duration]\\nflight_id\\n  Missing required argument [type=missing_argument, input_value={}, input_type=dict]\\n    For further information visit https://errors.pydantic.dev/2.12/v/missing_argument', 'id': 'lc_601350b5-4605-415f-a9ab-94b2bb35c94d'}]",
+    "t3": "[{'type': 'text', 'text': '1 validation error for call[get_bookings_by_flight]\\nflight_id\\n  Missing required argument [type=missing_argument, input_value={}, input_type=dict]\\n    For further information visit https://errors.pydantic.dev/2.12/v/missing_argument', 'id': 'lc_aa593c8a-d63d-447c-82d2-0f2739cf8c30'}]",
+    "t4": "[{'type': 'text', 'text': '1 validation error for call[get_customer_profile]\\nuser_id\\n  Missing required argument [type=missing_argument, input_value={}, input_type=dict]\\n    For further information visit https://errors.pydantic.dev/2.12/v/missing_argument', 'id': 'lc_6b8cffcc-1a98-48e6-b351-26537fe8f5e1'}]",
+    "t5": "[{'type': 'text', 'text': '3 validation errors for call[get_flight_options]\\noriginSkyId\\n  Missing required argument [type=missing_argument, input_value={}, input_type=dict]\\n    For further information visit https://errors.pydantic.dev/2.12/v/missing_argument\\ndestinationSkyId\\n  Missing required argument [type=missing_argument, input_value={}, input_type=dict]\\n    For further information visit https://errors.pydantic.dev/2.12/v/missing_argument\\ndepartureDate\\n  Missing required argument [type=missing_argument, input_value={}, input_type=dict]\\n    For further information visit https://errors.pydantic.dev/2.12/v/missing_argument', 'id': 'lc_7416aeaa-dcf3-430a-9d56-9ea633ad32f0'}]",
+    "t6": "[{'type': 'text', 'text': '1 validation error for call[check_alternative_transport]\\ndestination\\n  Missing required argument [type=missing_argument, input_value={}, input_type=dict]\\n    For further information visit https://errors.pydantic.dev/2.12/v/missing_argument', 'id': 'lc_182f2928-ac93-4636-88f2-f0587457e368'}]",
+    "t7": "[{'type': 'text', 'text': '1 validation error for call[CalculateCompensation]\\nbooking_id\\n  Missing required argument [type=missing_argument, input_value={}, input_type=dict]\\n    For further information visit https://errors.pydantic.dev/2.12/v/missing_argument', 'id': 'lc_2e057e0b-7c0a-4fac-b5e7-58b08c062f9a'}]",
+    "t8": "Planning failed during execution"
+  },
+  "result": "Planning failed during execution",
+  "token_usage": {
+    "llm_calls": 2,
+    "input_tokens": 743,
+    "output_tokens": 1206,
+    "total_tokens": 1949,
+    "peak_input_tokens": 587
+  },
+  "latency_seconds": 45.746
+}

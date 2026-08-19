@@ -10,7 +10,15 @@ from planning.schema import (
 from planning.tool_registry import MCPToolRegistry
 
 
-
+def _clean_json_response(content: str) -> str:
+    content = content.strip()
+    if content.startswith("```json"):
+        content = content[7:]
+    elif content.startswith("```"):
+        content = content[3:]
+    if content.endswith("```"):
+        content = content[:-3]
+    return content.strip()
 class PlanAndSolvePlanner:
 
 
@@ -23,9 +31,30 @@ class PlanAndSolvePlanner:
         self.llm = llm
         self.tool_registry = tool_registry
 
+    def _available_tool_names(self) -> list[str]:
+        """
+        Return the real MCP tool names available to this planner.
+        """
 
+        registry = self.tool_registry
 
-    def create_plan(
+        if hasattr(registry, "tools"):
+            tools = registry.tools
+        elif hasattr(registry, "registry"):
+            tools = registry.registry
+        else:
+            return []
+
+        if isinstance(tools, dict):
+            return sorted(tools.keys())
+
+        return sorted(
+            tool.name
+            for tool in tools
+            if hasattr(tool, "name")
+        )
+
+    async def create_plan(
         self,
         task: str
     ) -> list[dict[str, Any]]:
@@ -37,7 +66,12 @@ class PlanAndSolvePlanner:
         - MCP tool name
         - arguments
         """
+        available_tools = self._available_tool_names()
 
+        tools_text = "\n".join(
+            f"- {name}"
+            for name in available_tools
+        )
 
         prompt = f"""
         You are a planning agent.
@@ -46,21 +80,32 @@ class PlanAndSolvePlanner:
         {task}
 
 
+        REAL MCP TOOLS AVAILABLE:
+        {tools_text}
+
+        IMPORTANT RULES:
+
+        1. You MUST use ONLY tools from the REAL MCP TOOLS AVAILABLE list.
+        2. NEVER invent, rename, or assume a tool.
+        3. The "tool" field MUST exactly match one of the listed tool names.
+        4. If one operation is not directly available, compose it using
+        multiple available tools.
+        5. Do not use examples such as search_flights unless that exact
+        tool exists in the available list.
+        6. Return ONLY a valid JSON array.
+        7. Do not include markdown or explanations.
+
         Create a step-by-step execution plan.
-
-
-        Return ONLY valid JSON array.
 
 
         Format:
 
         [
           {{
-            "step": "Search available flights",
-            "tool": "search_flights",
+            "step": "Check the current flight status",
+            "tool": "get_flight_status",
             "args": {{
-                "source": "CAI",
-                "destination": "DXB"
+            "flight_id": "3"
             }}
           }}
         ]
@@ -68,22 +113,20 @@ class PlanAndSolvePlanner:
         """
 
 
-        response = self.llm.invoke(
+        response =  self.llm.invoke(
             prompt
         )
 
 
         try:
-
-            return json.loads(
-                response.content
-            )
+            cleaned = _clean_json_response(response.content)
+            return json.loads(cleaned)
 
 
         except Exception:
 
             return []
-
+        
 
 
     async def execute_step(
@@ -98,21 +141,35 @@ class PlanAndSolvePlanner:
         tool_name = step.get(
             "tool"
         )
-
         args = step.get(
             "args",
             {}
         )
-
-
         if not tool_name:
 
             return {
                 "success": False,
                 "error": "No tool specified"
             }
+        resolved_name = tool_name
+        if hasattr(self.tool_registry, "_resolve_tool_name"):
+            resolved_name = self.tool_registry._resolve_tool_name(tool_name)
 
+        available_tools = set(self._available_tool_names())
+        
+        available_tools = set(
+            self._available_tool_names()
+        )
 
+        if tool_name not in available_tools:
+            return {
+                "success": False,
+                "tool": tool_name,
+                "error": (
+                    f"Unknown MCP tool '{tool_name}'. "
+                    f"Available tools: {sorted(available_tools)}"
+                ),
+            }
 
         try:
 
@@ -161,7 +218,7 @@ class PlanAndSolvePlanner:
 
         # 1. Generate plan
 
-        plan = self.create_plan(
+        plan = await self.create_plan(
             task
         )
 

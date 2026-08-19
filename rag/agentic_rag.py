@@ -2,14 +2,14 @@ from groq import Groq
 from dotenv import load_dotenv
 from rag.retriever import retrieve
 from langchain_groq import ChatGroq
+
+from langchain_mistralai import ChatMistralAI
 import os
-
-load_dotenv()
-llm = ChatGroq(
-    model="llama-3.1-8b-instant",
-    temperature=0
+llm = ChatMistralAI(
+    model="mistral-large-latest",
+    temperature=0,
+    api_key=os.getenv("MISTRAL_API_KEY"),
 )
-
 
 
 
