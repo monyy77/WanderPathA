@@ -1,0 +1,84 @@
+{
+  "summary": {
+    "decomposition_first": {
+      "runs": 5,
+      "successes": 3,
+      "success_rate": 0.6,
+      "avg_latency": 82.8956029199995,
+      "avg_llm_calls": 0.0,
+      "avg_tokens": 0.0,
+      "total_tokens": 0,
+      "total_llm_calls": 0
+    },
+    "dynamic": {
+      "runs": 5,
+      "successes": 2,
+      "success_rate": 0.4,
+      "avg_latency": 87.51590355999069,
+      "avg_llm_calls": 3.6,
+      "avg_tokens": 0.0,
+      "total_tokens": 0,
+      "total_llm_calls": 18
+    },
+    "plan_and_solve": {
+      "runs": 5,
+      "successes": 4,
+      "success_rate": 0.8,
+      "avg_latency": 77.86674416002352,
+      "avg_llm_calls": 0.0,
+      "avg_tokens": 0.0,
+      "total_tokens": 0,
+      "total_llm_calls": 0
+    },
+    "tree_of_thoughts": {
+      "runs": 5,
+      "successes": 3,
+      "success_rate": 0.6,
+      "avg_latency": 22.3217450199998,
+      "avg_llm_calls": 0.0,
+      "avg_tokens": 0.0,
+      "total_tokens": 0,
+      "total_llm_calls": 0
+    },
+    "lats": {
+      "runs": 5,
+      "successes": 0,
+      "success_rate": 0.0,
+      "avg_latency": 11.308029499999247,
+      "avg_llm_calls": 0.0,
+      "avg_tokens": 0.0,
+      "total_tokens": 0,
+      "total_llm_calls": 0
+    },
+    "lats_ungrounded": {
+      "runs": 5,
+      "successes": 0,
+      "success_rate": 0.0,
+      "avg_latency": 8.696721720020287,
+      "avg_llm_calls": 0.0,
+      "avg_tokens": 0.0,
+      "total_tokens": 0,
+      "total_llm_calls": 0
+    },
+    "self_refine": {
+      "runs": 5,
+      "successes": 4,
+      "success_rate": 0.8,
+      "avg_latency": 4.3879537199856715,
+      "avg_llm_calls": 2.0,
+      "avg_tokens": 0.0,
+      "total_tokens": 0,
+      "total_llm_calls": 10
+    },
+    "reflexion": {
+      "runs": 5,
+      "successes": 4,
+      "success_rate": 0.8,
+      "avg_latency": 20.23688893999206,
+      "avg_llm_calls": 1.0,
+      "avg_tokens": 0.0,
+      "total_tokens": 0,
+      "total_llm_calls": 5
+    }
+  }
+}

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 
 METHODS = [
@@ -31,29 +30,46 @@ def aggregate(results):
             continue
 
         successes = sum(
-            r["success"]
+            bool(r["success"])
+            for r in rows
+        )
+
+        total_runs = len(rows)
+
+        total_latency = sum(
+            r["metrics"].get("latency_seconds", 0)
+            for r in rows
+        )
+
+        total_calls = sum(
+            r["metrics"].get("llm_calls", 0)
+            for r in rows
+        )
+
+        total_tokens = sum(
+            r["metrics"].get("total_tokens", 0)
             for r in rows
         )
 
         table[method] = {
-            "runs": len(rows),
+            "runs": total_runs,
             "successes": successes,
-            "success_rate": successes / len(rows),
+            "success_rate": successes / total_runs,
 
-            "avg_latency": sum(
-                r["metrics"]["latency_seconds"]
-                for r in rows
-            ) / len(rows),
+            "avg_latency": (
+                total_latency / total_runs
+            ),
 
-            "avg_llm_calls": sum(
-                r["metrics"]["llm_calls"]
-                for r in rows
-            ) / len(rows),
+            "avg_llm_calls": (
+                total_calls / total_runs
+            ),
 
-            "avg_tokens": sum(
-                r["metrics"]["total_tokens"]
-                for r in rows
-            ) / len(rows),
+            "avg_tokens": (
+                total_tokens / total_runs
+            ),
+
+            "total_tokens": total_tokens,
+            "total_llm_calls": total_calls,
         }
 
     return table
@@ -62,20 +78,41 @@ def aggregate(results):
 def markdown(table):
 
     lines = [
-        "# WanderPathA Benchmark",
+        "# WanderPathA Benchmark Comparison",
         "",
-        "| Method | Success | LLM Calls | Tokens | Latency |",
-        "|---|---:|---:|---:|---:|",
+        "| Method | Success | Success Rate | Avg. LLM Calls | Avg. Tokens | Avg. Latency |",
+        "|:--|--:|--:|--:|--:|--:|",
     ]
 
     for method, row in table.items():
 
+        success = (
+            f"{row['successes']}/{row['runs']}"
+        )
+
+        success_rate = (
+            f"{row['success_rate'] * 100:.1f}%"
+        )
+
+        llm_calls = (
+            f"{row['avg_llm_calls']:.1f}"
+        )
+
+        tokens = (
+            f"{row['avg_tokens']:,.0f}"
+        )
+
+        latency = (
+            f"{row['avg_latency']:.2f}s"
+        )
+
         lines.append(
-            f"| {method} "
-            f"| {row['successes']}/{row['runs']} "
-            f"| {row['avg_llm_calls']:.1f} "
-            f"| {row['avg_tokens']:.0f} "
-            f"| {row['avg_latency']:.2f}s |"
+            f"| **{method}** "
+            f"| {success} "
+            f"| {success_rate} "
+            f"| {llm_calls} "
+            f"| {tokens} "
+            f"| {latency} |"
         )
 
     return "\n".join(lines)
@@ -106,11 +143,15 @@ def generate_report(results, output_dir):
         encoding="utf-8",
     )
 
-    print("\n" + "=" * 60)
-    print("COMPARISON")
-    print("=" * 60)
+    print("\n" + "=" * 80)
+    print("WANDERPATHA BENCHMARK COMPARISON")
+    print("=" * 80)
+
     print(markdown(table))
 
-    print("\nSaved:")
-    print(json_path)
-    print(md_path)
+    print("\n" + "=" * 80)
+    print("FILES")
+    print("=" * 80)
+
+    print(f"JSON report : {json_path}")
+    print(f"Markdown    : {md_path}")
