@@ -40,6 +40,9 @@ class TaskType(str, Enum):
       (Plan-and-Solve / Tree of Thoughts / LATS) because it has real
       branching or a real cost to a wrong answer. Routed by
       planner_router.py (Person 2's concern) -- this file only marks it.
+      CRITICAL GRAPH RULE:
+        - Your plan MUST have EXACTLY ONE final/terminal step at the very end that synthesizes all previous results (e.g., "Synthesize overall flight status and customer compensation into a final report").
+        - Do NOT end the graph/plan with multiple independent parallel tasks.
     """
 
     TOOL_CALL = "tool_call"
@@ -109,3 +112,16 @@ class Plan(BaseModel):
 
     def terminal_tasks(self) -> list[str]:
         return [node for node, degree in self.graph.out_degree if degree == 0]
+    
+    def get_terminal_task(self) -> Task:
+        """Returns the single terminal task, or falls back to the last leaf node if multiple exist."""
+        terminals = self.terminal_tasks()
+        if not terminals:
+            raise ValueError("No terminal task found in the plan graph.")
+        
+        if len(terminals) > 1:
+            topo_order = self.topological_order()
+            last_terminal_id = max(terminals, key=lambda t_id: topo_order.index(t_id))
+            return self.task(last_terminal_id)
+            
+        return self.task(terminals[0])

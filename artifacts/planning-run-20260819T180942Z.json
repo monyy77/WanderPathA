@@ -1,0 +1,108 @@
+{
+  "agent": "planning_agent (IROPS reshuffle)",
+  "mode": "decomposition_first",
+  "goal": "Flight 2 has a 120-minute delay because of bad weather and has connection risk. Find the affected booking and propose an appropriate rebooking plan.",
+  "model": "mistral-large-latest",
+  "plan": {
+    "goal": "Flight 2 has a 120-minute delay because of bad weather and has connection risk. Find the affected booking and propose an appropriate rebooking plan.",
+    "tasks": [
+      {
+        "id": "t1",
+        "instruction": "Retrieve all bookings associated with Flight 2.",
+        "depends_on": [],
+        "kind": "tool_call",
+        "tool_name": "get_bookings_by_flight"
+      },
+      {
+        "id": "t2",
+        "instruction": "Confirm the disruption reason and delay duration for Flight 2.",
+        "depends_on": [],
+        "kind": "tool_call",
+        "tool_name": "check_disruption_reason"
+      },
+      {
+        "id": "t3",
+        "instruction": "Verify the connection risk for each affected booking from Flight 2.",
+        "depends_on": [
+          "t1"
+        ],
+        "kind": "tool_call",
+        "tool_name": "check_connection_risk"
+      },
+      {
+        "id": "t4",
+        "instruction": "Gather flight options for rebooking affected passengers, considering nearby airports if necessary.",
+        "depends_on": [
+          "t1",
+          "t2"
+        ],
+        "kind": "tool_call",
+        "tool_name": "get_flight_options"
+      },
+      {
+        "id": "t5",
+        "instruction": "Assess the severity of the disruption to prioritize rebooking efforts.",
+        "depends_on": [
+          "t2"
+        ],
+        "kind": "tool_call",
+        "tool_name": "get_disruption_severity"
+      },
+      {
+        "id": "t6",
+        "instruction": "Evaluate customer profiles and booking history to tailor rebooking options (e.g., VIP upgrades, alternative transport).",
+        "depends_on": [
+          "t1"
+        ],
+        "kind": "tool_call",
+        "tool_name": "get_customer_profile"
+      },
+      {
+        "id": "t7",
+        "instruction": "Propose an appropriate rebooking plan for each affected booking, considering connection risks, disruption severity, flight options, and customer profiles.",
+        "depends_on": [
+          "t1",
+          "t3",
+          "t4",
+          "t5",
+          "t6"
+        ],
+        "kind": "planned",
+        "tool_name": null
+      }
+    ]
+  },
+  "execution_batches": [
+    [
+      "t1",
+      "t2"
+    ],
+    [
+      "t3",
+      "t4",
+      "t5",
+      "t6"
+    ],
+    [
+      "t7"
+    ]
+  ],
+  "outputs": {
+    "t1": "[{'type': 'text', 'text': '1 validation error for call[get_bookings_by_flight]\\nflight_id\\n  Missing required argument [type=missing_argument, input_value={}, input_type=dict]\\n    For further information visit https://errors.pydantic.dev/2.12/v/missing_argument', 'id': 'lc_674059a2-a83e-4112-a1ae-92c9042288d9'}]",
+    "t2": "[{'type': 'text', 'text': '1 validation error for call[check_disruption_reason]\\nflight_id\\n  Missing required argument [type=missing_argument, input_value={}, input_type=dict]\\n    For further information visit https://errors.pydantic.dev/2.12/v/missing_argument', 'id': 'lc_79646512-cedd-4746-9f80-f9ebfa6f1e51'}]",
+    "t3": "[{'type': 'text', 'text': '1 validation error for call[check_connection_risk]\\nflight_id\\n  Missing required argument [type=missing_argument, input_value={}, input_type=dict]\\n    For further information visit https://errors.pydantic.dev/2.12/v/missing_argument', 'id': 'lc_17e846da-96dd-4fe3-b655-c1832d5f4c8d'}]",
+    "t4": "[{'type': 'text', 'text': '3 validation errors for call[get_flight_options]\\noriginSkyId\\n  Missing required argument [type=missing_argument, input_value={}, input_type=dict]\\n    For further information visit https://errors.pydantic.dev/2.12/v/missing_argument\\ndestinationSkyId\\n  Missing required argument [type=missing_argument, input_value={}, input_type=dict]\\n    For further information visit https://errors.pydantic.dev/2.12/v/missing_argument\\ndepartureDate\\n  Missing required argument [type=missing_argument, input_value={}, input_type=dict]\\n    For further information visit https://errors.pydantic.dev/2.12/v/missing_argument', 'id': 'lc_9ea25381-5851-4369-af12-1cda2f8c7ba6'}]",
+    "t5": "[{'type': 'text', 'text': '1 validation error for call[get_disruption_severity]\\nflight_id\\n  Missing required argument [type=missing_argument, input_value={}, input_type=dict]\\n    For further information visit https://errors.pydantic.dev/2.12/v/missing_argument', 'id': 'lc_abffdaba-2da4-4aa3-881f-20101627459c'}]",
+    "t6": "[{'type': 'text', 'text': '1 validation error for call[get_customer_profile]\\nuser_id\\n  Missing required argument [type=missing_argument, input_value={}, input_type=dict]\\n    For further information visit https://errors.pydantic.dev/2.12/v/missing_argument', 'id': 'lc_8882f772-7057-42c7-9973-28fece340298'}]",
+    "t7": "[{'type': 'text', 'text': \"1 validation error for call[get_bookings_by_flight]\\nflight_id\\n  Input should be a valid integer, unable to parse string as an integer [type=int_parsing, input_value='Flight 2', input_type=str]\\n    For further information visit https://errors.pydantic.dev/2.12/v/int_parsing\", 'id': 'lc_90155a98-17d5-40af-b4bf-c20f44a56e68'}]"
+  },
+  "result": "[{'type': 'text', 'text': \"1 validation error for call[get_bookings_by_flight]\\nflight_id\\n  Input should be a valid integer, unable to parse string as an integer [type=int_parsing, input_value='Flight 2', input_type=str]\\n    For further information visit https://errors.pydantic.dev/2.12/v/int_parsing\", 'id': 'lc_90155a98-17d5-40af-b4bf-c20f44a56e68'}]",
+  "token_usage": {
+    "llm_calls": 2,
+    "input_tokens": 974,
+    "output_tokens": 181,
+    "total_tokens": 1155,
+    "peak_input_tokens": 873
+  },
+  "latency_seconds": 122.909
+}

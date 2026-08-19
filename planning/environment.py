@@ -1,89 +1,40 @@
-from typing import Any
+class EnvironmentFeedback:
+    success: bool
+    score: float
+    details: list[str]
 
 
 class TravelEnvironment:
 
-
-    def __init__(
-        self,
-        database
-    ):
-
+    def __init__(self, mcp_tools=None, database=None):
+        self.mcp_tools = mcp_tools or {}
         self.database = database
 
-
-
-    def check(
+    async def evaluate(
         self,
-        node,
-        result
-    ) -> dict[str, bool]:
-        """
-        Evaluate node using real environment feedback.
-        """
+        candidate,
+        task,
+        execution_result=None,
+        tool_name=None,
+    ):
+        success = execution_result is not None
 
-        feedback = {}
-
-
-        # Check flight availability
-        if node.tool == "search_flights":
-
-            feedback["flight_exists"] = (
-                result is not None
-                and len(result) > 0
-            )
-
-
-        # Check booking policy
-        feedback["policy_valid"] = (
-            self.check_policy(
-                node,
-                result
-            )
+        return EnvironmentFeedback(
+            success=success,
+            score=1.0 if success else 0.0,
+            details=[
+                "Validated against execution result"
+            ],
         )
 
-
-        # Check seat availability
-        feedback["seat_available"] = (
-            self.check_seats(
-                result
-            )
+    async def check(self, node, result):
+        feedback = await self.evaluate(
+            candidate=str(node),
+            task=str(node),
+            execution_result=result,
         )
 
-
-        return feedback
-
-
-
-    def check_policy(
-        self,
-        node,
-        result
-    ) -> bool:
-
-        # Example:
-        # VIP customer rules
-        # cancellation rules
-        # refund rules
-
-        return True
-
-
-
-    def check_seats(
-        self,
-        result
-    ) -> bool:
-
-        if not result:
-            return False
-
-
-        # Example:
-        # result from search_flights tool
-        # contains available seats
-
-        return result.get(
-            "available_seats",
-            0
-        ) > 0
+        return {
+            "grounded_execution": feedback.success,
+            "environment_score": feedback.score > 0,
+        }

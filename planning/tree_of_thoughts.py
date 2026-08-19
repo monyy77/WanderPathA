@@ -2,6 +2,8 @@ import json
 
 from typing import Any
 
+
+from planning.plan_and_solve import _clean_json_response
 from planning.schema import (
     PlannerResult,
     PlannerType,
@@ -24,7 +26,7 @@ class TreeOfThoughtsPlanner:
 
 
 
-    def generate_thoughts(
+    async def generate_thoughts(
         self,
         subtask: str
     ) -> list[ThoughtNode]:
@@ -54,25 +56,12 @@ class TreeOfThoughtsPlanner:
 
         Return ONLY valid JSON array.
 
+        REAL MCP TOOLS:
+        {list(self.tool_registry.tools.keys())}
 
-        Example:
-
-        [
-          {{
-            "description": "Choose cheapest flight",
-            "tool": "search_flights",
-            "args": {{
-                "sort": "price"
-            }}
-          }},
-          {{
-            "description": "Choose fastest flight",
-            "tool": "search_flights",
-            "args": {{
-                "sort": "duration"
-            }}
-          }}
-        ]
+        Use ONLY these tools.
+        Never invent a tool name.
+            
 
         """
 
@@ -83,10 +72,8 @@ class TreeOfThoughtsPlanner:
 
 
         try:
-
-            data = json.loads(
-                response.content
-            )
+            cleaned = _clean_json_response(response.content)
+            data = json.loads(cleaned)
 
         except Exception:
 
@@ -125,7 +112,7 @@ class TreeOfThoughtsPlanner:
 
 
 
-    def evaluate_thoughts(
+    async def evaluate_thoughts(
         self,
         thoughts: list[ThoughtNode]
     ) -> list[ThoughtNode]:
@@ -162,15 +149,15 @@ class TreeOfThoughtsPlanner:
 
 
 
-            response = self.llm.invoke(
+            response =  self.llm.invoke(
                 prompt
             )
 
 
             try:
-
+                score_str = response.content.strip().replace("`", "")
                 thought.score = float(
-                    response.content
+                    score_str
                 )
 
 
@@ -228,13 +215,14 @@ class TreeOfThoughtsPlanner:
     async def run(
         self,
         task_id: str,
-        subtask: str
+        subtask: str,
+        
     ) -> PlannerResult:
 
 
         # 1. Generate branches
 
-        thoughts = self.generate_thoughts(
+        thoughts = await self.generate_thoughts(
             subtask
         )
 
@@ -258,7 +246,7 @@ class TreeOfThoughtsPlanner:
 
         # 2. Evaluate branches
 
-        evaluated = self.evaluate_thoughts(
+        evaluated = await self.evaluate_thoughts(
             thoughts
         )
 

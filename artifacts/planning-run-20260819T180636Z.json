@@ -1,0 +1,35 @@
+{
+  "agent": "planning_agent (IROPS reshuffle)",
+  "mode": "decomposition_first",
+  "goal": "Check the current status of flight 1.",
+  "model": "mistral-large-latest",
+  "plan": {
+    "goal": "Check the current status of flight 1.",
+    "tasks": [
+      {
+        "id": "t1",
+        "instruction": "Retrieve the current status of flight 1, including delay or cancellation details.",
+        "depends_on": [],
+        "kind": "tool_call",
+        "tool_name": "get_flight_status"
+      }
+    ]
+  },
+  "execution_batches": [
+    [
+      "t1"
+    ]
+  ],
+  "outputs": {
+    "t1": "[{'type': 'text', 'text': '1 validation error for call[get_flight_status]\\nflight_id\\n  Missing required argument [type=missing_argument, input_value={}, input_type=dict]\\n    For further information visit https://errors.pydantic.dev/2.12/v/missing_argument', 'id': 'lc_f61e8acd-6e5a-42ac-a291-73346bdd919f'}]"
+  },
+  "result": "[{'type': 'text', 'text': '1 validation error for call[get_flight_status]\\nflight_id\\n  Missing required argument [type=missing_argument, input_value={}, input_type=dict]\\n    For further information visit https://errors.pydantic.dev/2.12/v/missing_argument', 'id': 'lc_f61e8acd-6e5a-42ac-a291-73346bdd919f'}]",
+  "token_usage": {
+    "llm_calls": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "total_tokens": 0,
+    "peak_input_tokens": 0
+  },
+  "latency_seconds": 19.597
+}

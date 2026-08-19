@@ -31,26 +31,27 @@ from langchain_core.callbacks import BaseCallbackHandler
 
 
 
-from .environment import TravelEnvironment
-from .planner_selector import PlannerSelector
+from agent.schema import build_agent_step_model
+from planning.environment import TravelEnvironment
+from planning.planner_selector import PlannerSelector
 
-from .plan_and_solve import PlanAndSolvePlanner
-from .tree_of_thoughts import TreeOfThoughtsPlanner
-from .lats import LATSPlanner
+from planning.plan_and_solve import PlanAndSolvePlanner
+from planning.tree_of_thoughts import TreeOfThoughtsPlanner
+from planning.lats import LATSPlanner
 
-from .tool_registry import MCPToolRegistry
+from planning.tool_registry import MCPToolRegistry
 
-from .schema import PlannerType, PlannerResult
+from planning.schema import PlannerType, PlannerResult
 
-from .dag import Plan
+from planning.dag import Plan
 
-from .decomposition import (
+from planning.decomposition import (
     decompose_goal,
     execute_plan,
     final_output,
 )
-
-from .dynamic_decomposition import dynamic_decomposition
+from groq import Groq
+from planning.dynamic_decomposition import dynamic_decomposition
 
 
 
@@ -193,131 +194,84 @@ class TokenTracker(BaseCallbackHandler):
 
 
 def build_llm():
-
-
     return init_chat_model(
-
-        model="llama-3.3-70b-versatile",
-
-        model_provider="groq",
-
-        max_tokens=1024,
-
-        max_retries=3,
-
+        model="mistral-large-latest",
+        temperature=0,
+        max_retries=10, 
+    timeout=120,
     )
+    
 
 
 
 
 async def execute_planned_task(
-
     task,
-
     outputs,
-
     goal,
-
     llm,
-
     client,
-
 ) -> PlannerResult:
+    tools = await discover_tools(client)
+    tool_registry = MCPToolRegistry(tools)
 
-
-    """
-    Select planner and execute subtask.
-
-    Person 1 only calls this function.
-    """
-
-
-
-    selector = PlannerSelector(
-        llm
+    environment = TravelEnvironment(
+        mcp_client=client
     )
 
+    selector = PlannerSelector(
+        llm=llm,
+        tool_registry=tool_registry,
+        environment=environment,
+    )
 
-    planner_type = selector.select_planner(
+    planner_type = await selector.select_planner(
         task.instruction
     )
 
-
-
-    tool_registry = MCPToolRegistry(
-        client
-    )
-
-
-
     if planner_type == PlannerType.PLAN_AND_SOLVE:
 
-
         planner = PlanAndSolvePlanner(
-
             llm,
-
-            tool_registry
-
+            tool_registry,
         )
-
-
 
     elif planner_type == PlannerType.TREE_OF_THOUGHTS:
 
-
         planner = TreeOfThoughtsPlanner(
-
             llm,
-
-            tool_registry
-
+            tool_registry,
         )
-
-
 
     elif planner_type == PlannerType.LATS:
 
-
-
-        environment = TravelEnvironment(
-
-            database=None
-
-        )
-
-
         planner = LATSPlanner(
-
             llm,
-
             tool_registry,
-
-            environment
-
+            environment,
         )
-
 
     else:
 
-
         raise ValueError(
-
             f"Unsupported planner {planner_type}"
-
         )
 
+    context = "\n\n".join(
+    f"OUTPUT FROM {dependency}:\n{outputs[dependency]}"
+    for dependency in task.depends_on
+) or "No prerequisite outputs."
 
-    result = await planner.run(
-
-        task_id=task.id,
-
-        task=task.instruction
-
+    full_task_prompt = (
+        f"Overall Goal: {goal}\n"
+        f"Task: {task.instruction}\n"
+        f"Context:\n{context}"
     )
 
-
-    return result
+    return await planner.run(
+        task.id,
+        full_task_prompt,
+    )
 
 
 def save_artifact(
@@ -446,7 +400,8 @@ async def run_planning_agent(
 
         "model":
 
-        "llama-3.3-70b-versatile"
+        "mistral-large-latest"
+             
 
     }
 

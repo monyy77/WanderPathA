@@ -1,7 +1,7 @@
 import time
 
-from .long_context_tests import LONG_CONTEXT_TESTS
-from .context_strategies import (
+from context_eval.long_context_tests import LONG_CONTEXT_TESTS
+from context_eval.context_strategies import (
     sliding_window,
     observation_masking,
     recursive_summarization,

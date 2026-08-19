@@ -1,7 +1,7 @@
 from langchain.messages import AIMessage, HumanMessage
-from memory.short_term_memory import ShortTermMemory
-from memory.fact_extraction import process_customer_message
-from Context_eval.context_strategies import sliding_window
+from memory.Short_term_memory import ShortTermMemory
+from memory.Fact_extraction import process_customer_message
+from context_eval.context_strategies import sliding_window
 
 
 def test_memory():

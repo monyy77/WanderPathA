@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
 from langchain.messages import AIMessage, HumanMessage, SystemMessage
 
-from .schema import (
+from agent.schema import (
     ACTION_INPUT_SCHEMAS,
     AgentStep,
     build_agent_step_model,
@@ -58,12 +58,18 @@ Think step by step and return only the structured response.
 def build_structured_model(action_names):
     step_model = build_agent_step_model(action_names)
     return init_chat_model(
-        model="llama-3.3-70b-versatile",
-        model_provider="groq",
-        max_tokens=1024,
+        model="mistral-large-latest",
+        temperature=0,
         max_retries=3,
     ).with_structured_output(step_model)
 
+
+# =====================================================
+# BENCHMARK EXPORTS
+# =====================================================
+
+llm = None
+mcp_tools = {}
 
 async def discover_tools(client):
     tools_list = await client.get_tools()

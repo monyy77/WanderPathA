@@ -8,9 +8,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-llm = ChatGroq(
-    model="llama-3.1-8b-instant",
-    temperature=0
+from langchain_mistralai import ChatMistralAI
+import os
+llm = ChatMistralAI(
+    model="mistral-large-latest",
+    temperature=0,
+    api_key=os.getenv("MISTRAL_API_KEY"),
 )
 
 # Load documents for BM25

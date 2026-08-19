@@ -42,7 +42,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .dag import Task
+from planning.dag import Task
 
 # Set by planning_agent.py at startup so the fallback can still call the LLM.
 _llm: Any = None

@@ -5,7 +5,7 @@ from planning.schema import (
     PlannerType,
     LATSNode
 )
-
+from langchain_core.utils.json import parse_json_markdown
 
 class LATSPlanner:
 
@@ -22,7 +22,7 @@ class LATSPlanner:
 
 
 
-    def expand(
+    async def expand(
         self,
         node: LATSNode
     ):
@@ -70,15 +70,16 @@ class LATSPlanner:
         """
 
 
-        response = self.llm.invoke(
-            prompt
-        )
+        response = await self.llm.ainvoke(prompt)
 
 
         # LangChain returns AIMessage
-        responses = json.loads(
-            response.content
-        )
+        try:
+            responses = parse_json_markdown(response.content)
+            if not isinstance(responses, list):
+                responses = []
+        except Exception:
+            responses = []
 
 
         for i, item in enumerate(responses):
@@ -135,7 +136,7 @@ class LATSPlanner:
 
     def calculate_reward(
         self,
-        feedback: dict
+        feedback 
     ):
         """
         Calculate reward from environment feedback.
@@ -145,22 +146,29 @@ class LATSPlanner:
         if not feedback:
             return 0.0
 
+        if hasattr(feedback, "score"):
+            return float(feedback.score)
+            
+        if hasattr(feedback, "is_passed"):
+            return 1.0 if feedback.is_passed else 0.0
 
+        if hasattr(feedback, "__dict__"):
+            fb_dict = feedback.__dict__
+        elif isinstance(feedback, dict):
+            fb_dict = feedback
+        else:
+            return 0.0
 
-        passed = sum(
-            feedback.values()
-        )
+        if not fb_dict:
+            return 0.0
 
+        numeric_values = [v for v in fb_dict.values() if isinstance(v, (int, float, bool))]
+        if not numeric_values:
+            return 0.0
 
-        total = len(
-            feedback
-        )
+        return sum(numeric_values) / len(numeric_values)
 
-
-        return passed / total
-
-
-
+    
     async def evaluate(
         self,
         node: LATSNode
@@ -179,11 +187,12 @@ class LATSPlanner:
 
 
         # Environment feedback
-        feedback = self.environment.check(
-            node,
-            result
-        )
-
+        feedback = await self.environment.evaluate(
+    candidate=str(result),
+    task=node.thought,
+    execution_result=result,
+    tool_name=node.tool,
+)
 
         node.feedback = feedback
 
@@ -275,7 +284,7 @@ class LATSPlanner:
 
 
 
-            children = self.expand(
+            children = await self.expand(
                 current
             )
 
@@ -353,18 +362,13 @@ class LATSPlanner:
 
 
     async def run(
-        self,
-        task_id,
-        request
-    ):
-
-
+    self,
+    task_id: str,
+    task: str
+) -> PlannerResult:
         root = LATSNode(
-
             id="root",
-
-            thought=request
-
+            thought=task
         )
 
 

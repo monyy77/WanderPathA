@@ -20,8 +20,13 @@ class GraphState(TypedDict):
     loop_step: int
 
 
-llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0)
-
+from langchain_mistralai import ChatMistralAI
+import os
+llm = ChatMistralAI(
+    model="mistral-large-latest",
+    temperature=0,
+    api_key=os.getenv("MISTRAL_API_KEY"),
+)
 
 class GradeHallucination(BaseModel):
     binary_score: str = Field(description="Grounded strictly in retrieved facts: 'yes' or 'no'")
