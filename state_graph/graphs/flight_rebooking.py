@@ -1,7 +1,7 @@
 """
 state_graph/graphs/flight_rebooking.py
 
-Graph 1: Flight Rebooking & Coordination (Wanderpath) - Issue #2
+Graph 1: Flight Rebooking & Coordination (Wanderpath) - Issue #2 / #3
 Owner: Person 1
 
 WHY THIS IS A STATE GRAPH AND NOT A STRAIGHT-LINE SCRIPT:
@@ -16,9 +16,13 @@ WHY THIS IS A STATE GRAPH AND NOT A STRAIGHT-LINE SCRIPT:
   actual plans), and a refund above a dollar threshold (financial risk
   needs a human check).
 
-NOTE: the task-decomposition and RAG nodes referenced in TODO comments
-below are added in Issue #3 - this file establishes the graph's state
-shape, nodes, transitions, cycle, and checkpoint wiring first.
+TWO LLM-CALL ADDITIONS FOR THIS GRAPH (Issue #3): Task Decomposition +
+RAG. See task_decomposition.py and policy_rag.py for the "why these
+two, not the other two" rationale on each node. Short version: this
+graph never needs to search over multiple possible plans (no ToT/
+LATS - the rebooking sequence is fixed) and never needs a tool-calling
+loop at the decision point itself (no constrained ReAct - decisions
+here are look-up-and-branch, not act-and-observe).
 
 STATE SHAPE (a plain dict, kept JSON-serializable so it can go straight
 into checkpointer.save_checkpoint):
@@ -26,10 +30,16 @@ into checkpointer.save_checkpoint):
     "run_id": str,
     "flight_id": int,
     "customer_id": int,
-    "customer_response": str | None,   # "rebook" | "refund" | None
-    "alternatives_tried": list[dict],  # log of rejected alternatives
+    "customer_is_vip": bool,
+    "customer_response": str | None,     # "rebook" | "refund" | None
+    "connected_services": list | None,   # e.g. hotel transfers tied to old flight
+    "rebooking_plan": list[dict] | None, # from task_decomposition
+    "alternatives_tried": list[dict],
     "proposed_alternative": dict | None,
+    "airline_response": str | None,
     "refund_amount": float | None,
+    "refund_decision": dict | None,      # from policy_rag
+    "refund_approved": bool | None,
     "final_outcome": str | None,
 }
 
@@ -46,13 +56,19 @@ airline responds) and it picks up from the last saved node.
 from typing import Any
 
 from state_graph.checkpointer import save_checkpoint, load_checkpoint
+from state_graph.graphs.task_decomposition import (
+    decompose_rebooking_task,
+    mark_step_done,
+)
+from state_graph.graphs.policy_rag import get_refund_policy_for
 
 GRAPH_NAME = "flight_rebooking"
 
 # Refund amounts above this require a human to approve (HITL condition
-# #2). Chosen as a real financial-risk threshold, not an arbitrary
-# number - refunds under this are low-risk enough to automate, above
-# it we want a second pair of eyes.
+# #2). This number is grounded in policy doc "refund-002" (see
+# policy_rag.py) rather than being picked arbitrarily here - refunds
+# under this are low-risk enough to automate, above it we want a
+# second pair of eyes given the financial impact.
 REFUND_HITL_THRESHOLD = 500.0
 
 
@@ -69,8 +85,10 @@ def node_flight_disrupted(state: dict[str, Any]) -> tuple[str, dict[str, Any]]:
 def node_notify_customer(state: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     """Send the customer the rebook-or-refund choice.
     (Actual message sending is a TODO for MCP tool integration -
-    Issue #5. For now this just marks that we're waiting.)"""
-    # TODO(Issue #5): call the real MCP notification tool here.
+    Issue #4/#5 once the tool registry work lands. For now this just
+    marks that we're waiting.)"""
+    # TODO(Issue #5): call the real MCP notification tool here once
+    # runtime tool registration exists.
     return "awaiting_customer_response", state
 
 
@@ -92,7 +110,7 @@ def node_awaiting_customer_response(
     response = state.get("customer_response")
 
     if response == "rebook":
-        return "search_alternatives", state
+        return "decompose_rebooking", state
     elif response == "refund":
         return "process_refund", state
     elif response == "timeout_no_reply":
@@ -116,15 +134,32 @@ def node_hitl_no_response(state: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     return "hitl_no_response", state
 
 
+def node_decompose_rebooking(state: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """
+    TASK DECOMPOSITION NODE (Issue #3, addition #1).
+
+    Runs once, the first time we commit to the rebooking path. Builds
+    the ordered plan (cancel old booking -> search new flight ->
+    rebook connected services -> notify) and stores it in state so it
+    survives checkpoint/resume - we don't want to lose the plan and
+    re-decompose from scratch if the process crashes mid-run.
+    """
+    if state.get("rebooking_plan") is None:
+        plan = decompose_rebooking_task(state)
+        state = {**state, "rebooking_plan": plan}
+
+    return "search_alternatives", state
+
+
 def node_search_alternatives(state: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-    """Look for an alternative flight. Sets a proposed alternative and
-    moves to waiting on the airline's confirmation.
-    (Actual search, and the task-decomposition step that plans this
-    whole branch, are added in Issue #3.)"""
-    # TODO(Issue #3): add task decomposition node before this step.
+    """Look for an alternative flight (the 'search_new_flight' step of
+    the decomposition plan). Sets a proposed alternative and moves to
+    waiting on the airline's confirmation.
+    (Actual search is a TODO for MCP tool integration - Issue #5.)"""
     # TODO(Issue #5): replace with real MCP flight-search tool call.
     proposed = {"flight_number": "WP-PLACEHOLDER", "seat": "economy"}
     state = {**state, "proposed_alternative": proposed}
+    state = mark_step_done(state, "search_new_flight")
     return "awaiting_airline_response", state
 
 
@@ -160,31 +195,43 @@ def node_awaiting_airline_response(
 
 
 def node_confirm_rebooking(state: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-    """Terminal success path for the rebooking branch."""
+    """Terminal success path for the rebooking branch. Marks the
+    remaining decomposition steps done."""
+    state = mark_step_done(state, "cancel_old_booking")
+    if state.get("connected_services"):
+        state = mark_step_done(state, "rebook_connected_services")
+    state = mark_step_done(state, "notify_customer_of_new_flight")
     state = {**state, "final_outcome": "rebooked"}
     return "end", state
 
 
 def node_process_refund(state: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     """
-    Decide whether a refund can go through automatically or needs a
-    human. The RAG-backed policy lookup that grounds this decision is
-    added in Issue #3.
-    """
-    # TODO(Issue #3): replace with real RAG-backed policy lookup.
-    refund_amount = state.get("refund_amount", 0.0)
+    RAG NODE (Issue #3, addition #2).
 
-    if refund_amount > REFUND_HITL_THRESHOLD:
-        return "hitl_refund_approval", state
-    else:
+    Decides whether a refund can go through automatically or needs a
+    human, GROUNDED in Wanderpath's actual policy documents (see
+    policy_rag.py) rather than the model's guess of "typical" airline
+    policy. The retrieved policy chunk IDs are stored in state so the
+    decision is auditable later (e.g. by an admin reviewing a HITL
+    request or a ticket).
+    """
+    refund_decision = get_refund_policy_for(state)
+    state = {**state, "refund_decision": refund_decision}
+
+    if refund_decision["auto_approved"]:
         state = {**state, "final_outcome": "refunded_auto"}
         return "end", state
+    else:
+        return "hitl_refund_approval", state
 
 
 def node_hitl_refund_approval(state: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     """
     HITL #2: refund above REFUND_HITL_THRESHOLD needs a human agent's
-    approval through the platform before it is processed.
+    approval through the platform before it is processed. The agent
+    reviewing this can see `state["refund_decision"]["cited_policy_ids"]`
+    to know exactly which policy backed the calculation.
     """
     approved = state.get("refund_approved")
     if approved is True:
@@ -212,6 +259,7 @@ NODE_FUNCTIONS = {
     "notify_customer": node_notify_customer,
     "awaiting_customer_response": node_awaiting_customer_response,
     "hitl_no_response": node_hitl_no_response,
+    "decompose_rebooking": node_decompose_rebooking,
     "search_alternatives": node_search_alternatives,
     "awaiting_airline_response": node_awaiting_airline_response,
     "confirm_rebooking": node_confirm_rebooking,
@@ -281,6 +329,9 @@ def _run_graph(
         )
 
         if next_node == "end" or next_node in PAUSE_NODES:
+            # Either the run is genuinely finished, or it has hit a
+            # point that needs an external event/human before it can
+            # go any further. Either way, stop looping here.
             return {"final_node": next_node, "status": status, "state": state}
 
         current_node = next_node
