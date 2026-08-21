@@ -2,8 +2,10 @@ import sys
 import os
 from fastmcp import FastMCP , Context
 from mcp.types import ElicitRequestedSchema
+
 from typing import Literal
 import asyncio
+from server.tool_guard import guarded, guarded_async_decorator
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.abspath(os.path.join(current_dir, ".."))
@@ -91,6 +93,8 @@ def _register_vip_tools():
 
 
 @mcp.tool()
+@guarded_async_decorator("upgrade_to_vip")
+
 async def upgrade_to_vip(ctx: Context, customer_id: int):
     """
     Upgrade a customer to VIP status. The first time this happens on this
@@ -165,14 +169,14 @@ async def upgrade_to_vip(ctx: Context, customer_id: int):
         conn.close()
 
 # Register Existing Tools
-mcp.tool()(get_flight_status.func)
-mcp.tool()(get_weather.func)
-mcp.tool()(get_delay_duration.func)
-mcp.tool()(check_disruption_reason.func)
-mcp.tool()(get_nearby_airports.func)
-mcp.tool()(get_flight_options.func)
-mcp.tool()(get_customer_profile.func)
-mcp.tool()(get_booking_history.func)
+mcp.tool()(guarded("get_flight_status", get_flight_status.func))
+mcp.tool()(guarded("get_weather", get_weather.func))
+mcp.tool()(guarded("get_delay_duration", get_delay_duration.func))
+mcp.tool()(guarded("check_disruption_reason", check_disruption_reason.func))
+mcp.tool()(guarded("get_nearby_airports", get_nearby_airports.func))
+mcp.tool()(guarded("get_flight_options", get_flight_options.func))
+mcp.tool()(guarded("get_customer_profile", get_customer_profile.func))
+mcp.tool()(guarded("get_booking_history", get_booking_history.func))
 
 # --- Registered for the Planning Agent (IROPS reshuffle) -------------------
 # These tools already existed in tools/*.py but were not yet wired onto the
@@ -180,12 +184,12 @@ mcp.tool()(get_booking_history.func)
 # existing server and tools" requirement. get_bookings_by_flight is the one
 # genuinely new tool: nothing previously covered "which bookings/customers
 # are on this disrupted flight".
-mcp.tool()(get_bookings_by_flight.func)
-mcp.tool()(check_connection_risk.func)
-mcp.tool()(get_disruption_severity.func)
-mcp.tool()(check_alternative_transport.func)
-mcp.tool()(CalculateCompensation.func)
-mcp.tool()(escalate_to_human.func)
+mcp.tool()(guarded("get_bookings_by_flight", get_bookings_by_flight.func))
+mcp.tool()(guarded("check_connection_risk", check_connection_risk.func))
+mcp.tool()(guarded("get_disruption_severity", get_disruption_severity.func))
+mcp.tool()(guarded("check_alternative_transport", check_alternative_transport.func))
+mcp.tool()(guarded("CalculateCompensation", CalculateCompensation.func))
+mcp.tool()(guarded("escalate_to_human", escalate_to_human.func))
 mcp.prompt()(refund_explanation)
 mcp.prompt()(explain_flight_delay)
 mcp.prompt()(travel_voucher_message)
