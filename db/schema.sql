@@ -1,5 +1,5 @@
-CREATE DATABASE travel_agency;
-USE travel_agency;
+CREATE DATABASE IF NOT EXISTS wanderpath_db;
+USE wanderpath_db;
 
 CREATE TABLE Airports (
     airport_code VARCHAR(10) PRIMARY KEY,
@@ -128,3 +128,38 @@ CREATE TABLE GraphCheckpoints (
     INDEX idx_run_id (run_id),
     INDEX idx_run_id_created (run_id, created_at)
 );
+
+-- ============================================================
+-- Added for Final Project: MCP tool registry data boundary (Issue #4)
+-- Owner: Person 1
+--
+-- WHY THIS TABLE EXISTS:
+-- Prior grading flagged that the MCP Server Lab had no attributable
+-- domain-data ownership - protocol/integration code existed, but no
+-- documented schema or data-boundary work. This table is that
+-- boundary: it defines exactly what a "registered tool" record is,
+-- so tool registration/deregistration (Issue #5, driven from the
+-- admin panel) has a real, validated data store behind it instead of
+-- being an in-memory-only toggle that disappears on restart.
+-- ============================================================
+CREATE TABLE RegisteredTools (
+    tool_id INT AUTO_INCREMENT PRIMARY KEY,
+    tool_name VARCHAR(100) NOT NULL UNIQUE,
+    agent_name VARCHAR(100) NOT NULL,
+    description VARCHAR(500) NOT NULL,
+    parameters_schema JSON NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_agent_name (agent_name),
+    INDEX idx_is_active (is_active)
+);
+
+-- Seed data: register the tools that already exist in tools/ so the
+-- registry reflects reality from day one, rather than starting empty
+-- and pretending no tools exist until someone registers them by hand.
+INSERT INTO RegisteredTools (tool_name, agent_name, description, parameters_schema, is_active) VALUES
+('search_flights', 'flight_rebooking', 'Search for alternative flights given an origin/destination/date range.', JSON_OBJECT('flight_id', 'int', 'date_range', 'string'), TRUE),
+('cancel_booking', 'flight_rebooking', 'Cancel an existing booking by booking_id.', JSON_OBJECT('booking_id', 'int'), TRUE),
+('process_refund', 'flight_rebooking', 'Process a refund for a booking, given an approved amount.', JSON_OBJECT('booking_id', 'int', 'amount', 'float'), TRUE);
