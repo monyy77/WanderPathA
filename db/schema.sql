@@ -109,3 +109,22 @@ CREATE TABLE Escalations (
     FOREIGN KEY (employee_id)
         REFERENCES Employees(employee_id)
 );
+
+-- ============================================================
+-- Added for Final Project: State Graph checkpointing (Issue #1)
+-- Owner: Person 1
+-- Append-only log: every meaningful transition inserts a NEW row,
+-- never UPDATEs an old one. This gives us full history for the
+-- crash-and-resume demo, and for showing HITL/failure state later.
+-- ============================================================
+CREATE TABLE GraphCheckpoints (
+    checkpoint_id INT AUTO_INCREMENT PRIMARY KEY,
+    run_id VARCHAR(100) NOT NULL,
+    graph_name VARCHAR(100) NOT NULL,
+    current_node VARCHAR(100) NOT NULL,
+    state_json JSON NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'running',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_run_id (run_id),
+    INDEX idx_run_id_created (run_id, created_at)
+);
