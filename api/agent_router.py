@@ -1,42 +1,75 @@
-from typing import Any
+"""
+Agent Router
+
+Responsible for routing user requests
+to the correct autonomous agent.
+"""
+
+
+from planning.planning_agent import run_planning_agent
+
 
 class AgentRouter:
-    async def route(
-        self,
-        agent_id: str,
-        message: str,
-        session_id: str,
-        customer_id: str | None = None,
-    ) -> dict:
+    """
+    Central router for all WanderPath agents.
+    """
 
-        if agent_id == "planning":
-            return await self._planning(message)
 
-        elif agent_id == "memory":
-            return await self._memory(message, customer_id)
+    def __init__(self):
+        self.agents = {
+            "planning": self.run_planning,
+        }
 
-        elif agent_id == "flight":
-            return await self._flight(message)
 
-        elif agent_id == "refund":
-            return await self._refund(message)
+    def route(self, request: dict):
+        """
+        Main entry point.
 
-        elif agent_id == "vip":
-            return await self._vip(message)
+        request example:
 
-        raise ValueError(f"Unknown agent: {agent_id}")
+        {
+            "agent": "planning",
+            "message": "Rebook my delayed flight"
+        }
 
-    async def _planning(self, message: str) -> dict:
-        raise NotImplementedError
+        """
 
-    async def _memory(self, message: str, customer_id: str | None) -> dict:
-        raise NotImplementedError
+        agent_name = request.get(
+            "agent",
+            "planning"
+        )
 
-    async def _flight(self, message: str) -> dict:
-        raise NotImplementedError
+        if agent_name not in self.agents:
+            raise ValueError(
+                f"Unknown agent: {agent_name}"
+            )
 
-    async def _refund(self, message: str) -> dict:
-        raise NotImplementedError
+        return self.agents[agent_name](request)
 
-    async def _vip(self, message: str) -> dict:
-        raise NotImplementedError
+
+
+    def run_planning(self, request: dict):
+        """
+        Execute Planning Agent.
+        """
+
+        user_message = request.get(
+            "message"
+        )
+
+        if not user_message:
+            raise ValueError(
+                "Missing user message"
+            )
+
+
+        result = run_planning_agent(
+            user_message
+        )
+
+
+        return {
+            "agent": "planning",
+            "status": "success",
+            "result": result
+        }
