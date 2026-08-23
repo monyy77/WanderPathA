@@ -9,6 +9,12 @@ User message
 LLM Router
       |
       v
+MCP Capability
+      |
+      v
+Capability Mapper
+      |
+      v
 Agent Validation
       |
       v
@@ -18,11 +24,19 @@ Fallback Keyword Router (if needed)
 Agent execution
 """
 
+
 from planning.planning_agent import run_planning_agent
 
 
 from api.llm_router import LLMRouter
-from api.agent_registry import is_allowed_agent
+
+from api.agent_registry import (
+    is_allowed_agent
+)
+
+from api.capability_mapper import (
+    capability_to_agent
+)
 
 
 
@@ -31,6 +45,7 @@ from api.agent_registry import is_allowed_agent
 # -------------------------------------------------
 
 try:
+
     from agent.agent import run_agent
 
 except Exception:
@@ -39,7 +54,9 @@ except Exception:
 
 
 
+
 try:
+
     from state_graph.graphs.flight_rebooking import (
         run_flight_rebooking_graph
     )
@@ -50,7 +67,9 @@ except Exception:
 
 
 
+
 try:
+
     from state_graph.graphs.refund import (
         run_refund_graph
     )
@@ -61,7 +80,9 @@ except Exception:
 
 
 
+
 try:
+
     from state_graph.graphs.vip import (
         run_vip_graph
     )
@@ -73,41 +94,57 @@ except Exception:
 
 
 
+
 class AgentRouter:
+
 
 
     def __init__(self, llm=None):
 
 
-        # LLM based classifier
+        # -----------------------------------------
+        # MCP-aware LLM Router
+        # -----------------------------------------
 
         self.llm_router = LLMRouter(
             llm
         )
 
 
-        # Allowed execution routes
+
+        # -----------------------------------------
+        # Available execution routes
+        # -----------------------------------------
 
         self.agents = {
 
 
             "planning":
+
                 self.run_planning,
 
 
+
             "memory":
+
                 self.run_memory,
 
 
+
             "flight":
+
                 self.run_flight,
 
 
+
             "refund":
+
                 self.run_refund,
 
 
+
             "vip":
+
                 self.run_vip,
 
         }
@@ -115,9 +152,12 @@ class AgentRouter:
 
 
 
+
+
     # =================================================
     # Main Router
     # =================================================
+
 
     def route(self, request: dict):
 
@@ -128,14 +168,14 @@ class AgentRouter:
         )
 
 
-        # Select agent
 
         agent_id = self.classify(
             message
         )
 
 
-        # Extra validation
+
+        # Final safety validation
 
         if not is_allowed_agent(
             agent_id
@@ -153,41 +193,57 @@ class AgentRouter:
 
 
 
+
     # =================================================
     # Intelligent Classifier
     # =================================================
 
+
     def classify(self, message: str):
 
 
-        # -------------------------------
-        # First: LLM Router
-        # -------------------------------
+        # -----------------------------------------
+        # First: MCP + LLM Routing
+        # -----------------------------------------
 
-        agent = self.llm_router.classify(
-            message
+        capability = (
+
+            self.llm_router
+            .classify(message)
+
         )
 
 
 
-        if (
+        if capability:
 
-            agent
 
-            and
-
-            is_allowed_agent(agent)
-
-        ):
-
-            return agent
+            agent = capability_to_agent(
+                capability
+            )
 
 
 
+            if (
 
-        # -------------------------------
-        # Second: Fallback
-        # -------------------------------
+                agent
+
+                and
+
+                is_allowed_agent(agent)
+
+            ):
+
+                return agent
+
+
+
+
+
+
+        # -----------------------------------------
+        # Second: Fallback Router
+        # -----------------------------------------
 
         return self.keyword_fallback(
             message
@@ -197,9 +253,13 @@ class AgentRouter:
 
 
 
+
+
+
     # =================================================
     # Keyword Fallback
     # =================================================
+
 
     def keyword_fallback(self, message):
 
@@ -219,8 +279,11 @@ class AgentRouter:
             for word in [
 
                 "refund",
+
                 "compensation",
+
                 "money back",
+
                 "reimbursement",
 
             ]
@@ -228,6 +291,8 @@ class AgentRouter:
         ):
 
             return "refund"
+
+
 
 
 
@@ -243,10 +308,15 @@ class AgentRouter:
             for word in [
 
                 "flight",
+
                 "cancelled",
+
                 "canceled",
+
                 "delayed",
+
                 "rebook",
+
                 "reschedule",
 
             ]
@@ -254,6 +324,8 @@ class AgentRouter:
         ):
 
             return "flight"
+
+
 
 
 
@@ -269,9 +341,13 @@ class AgentRouter:
             for word in [
 
                 "remember",
+
                 "forget",
+
                 "preference",
+
                 "prefer",
+
                 "save my",
 
             ]
@@ -279,6 +355,8 @@ class AgentRouter:
         ):
 
             return "memory"
+
+
 
 
 
@@ -294,9 +372,13 @@ class AgentRouter:
             for word in [
 
                 "vip",
+
                 "upgrade",
+
                 "business class",
+
                 "luxury",
+
                 "premium",
 
             ]
@@ -304,6 +386,8 @@ class AgentRouter:
         ):
 
             return "vip"
+
+
 
 
 
@@ -316,9 +400,14 @@ class AgentRouter:
 
 
 
+
+
+
+
     # =================================================
     # Planning Agent
     # =================================================
+
 
     def run_planning(self, request):
 
@@ -330,18 +419,24 @@ class AgentRouter:
         )
 
 
+
         return {
 
 
             "agent":
+
                 "planning",
 
 
+
             "status":
+
                 "success",
 
 
+
             "result":
+
                 result,
 
         }
@@ -350,9 +445,14 @@ class AgentRouter:
 
 
 
+
+
+
+
     # =================================================
     # Memory Agent
     # =================================================
+
 
     def run_memory(self, request):
 
@@ -380,14 +480,19 @@ class AgentRouter:
 
 
             "agent":
+
                 "memory",
 
 
+
             "status":
+
                 "success",
 
 
+
             "result":
+
                 result,
 
         }
@@ -396,9 +501,14 @@ class AgentRouter:
 
 
 
+
+
+
+
     # =================================================
     # Flight Graph
     # =================================================
+
 
     def run_flight(self, request):
 
@@ -426,14 +536,19 @@ class AgentRouter:
 
 
             "agent":
+
                 "flight",
 
 
+
             "status":
+
                 "success",
 
 
+
             "result":
+
                 result,
 
         }
@@ -442,9 +557,14 @@ class AgentRouter:
 
 
 
+
+
+
+
     # =================================================
     # Refund Graph
     # =================================================
+
 
     def run_refund(self, request):
 
@@ -472,14 +592,19 @@ class AgentRouter:
 
 
             "agent":
+
                 "refund",
 
 
+
             "status":
+
                 "success",
 
 
+
             "result":
+
                 result,
 
         }
@@ -488,9 +613,14 @@ class AgentRouter:
 
 
 
+
+
+
+
     # =================================================
     # VIP Graph
     # =================================================
+
 
     def run_vip(self, request):
 
@@ -518,14 +648,19 @@ class AgentRouter:
 
 
             "agent":
+
                 "vip",
 
 
+
             "status":
+
                 "success",
 
 
+
             "result":
+
                 result,
 
         }
