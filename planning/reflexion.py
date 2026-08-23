@@ -2,6 +2,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
+MAX_REFLECTIONS = 10
+
+
+
 @dataclass
 class ReflectionMemory:
 
@@ -9,12 +13,22 @@ class ReflectionMemory:
         default_factory=list
     )
 
-    def add(self, text: str):
+
+    def add(
+        self,
+        text: str
+    ):
 
         if text.strip():
+
             self.reflections.append(
                 text.strip()
             )
+
+            self.reflections = (
+                self.reflections[-MAX_REFLECTIONS:]
+            )
+
 
 
 @dataclass
@@ -27,6 +41,7 @@ class ReflexionResult:
     reflections: list[str]
     llm_calls: int
     last_feedback: Any
+
 
 
 async def reflexion(
@@ -42,13 +57,23 @@ async def reflexion(
 ):
 
     if memory is None:
+
         memory = ReflectionMemory()
 
+
     answer = initial_draft or ""
+
     last_feedback = None
+
     calls = 0
 
-    for trial in range(1, max_trials + 1):
+
+
+    for trial in range(
+        1,
+        max_trials + 1
+    ):
+
 
         prompt = f"""
 Goal:
@@ -66,10 +91,11 @@ Do not invent facts.
 Use grounded evidence.
 """
 
-        response = llm.ainvoke(prompt)
 
-        if hasattr(response, "__await__"):
-            response = await response
+        response = await llm.ainvoke(
+            prompt
+        )
+
 
         answer = getattr(
             response,
@@ -77,37 +103,75 @@ Use grounded evidence.
             str(response),
         )
 
+
         calls += 1
 
-        last_feedback = await environment.evaluate(
-            candidate=answer,
-            task=task or goal,
-            tool_name=tool_name,
-        )
+
+
+        try:
+
+            last_feedback = await environment.evaluate(
+                candidate=answer,
+                task=task or goal,
+                tool_name=tool_name,
+            )
+
+
+        except Exception as e:
+
+            memory.add(
+                f"Evaluation failed: {str(e)}"
+            )
+
+            continue
+
+
 
         if last_feedback.success:
 
             return ReflexionResult(
+
                 goal=goal,
+
                 final_answer=answer,
+
                 successful=True,
+
                 trials=trial,
+
                 reflections=memory.reflections,
+
                 llm_calls=calls,
+
                 last_feedback=last_feedback,
+
             )
 
+
+
         memory.add(
+
             f"Trial {trial} failed: "
             f"{last_feedback.details}"
+
         )
 
+
+
     return ReflexionResult(
+
         goal=goal,
+
         final_answer=answer,
+
         successful=False,
+
         trials=max_trials,
+
         reflections=memory.reflections,
+
         llm_calls=calls,
+
         last_feedback=last_feedback,
+
     )
