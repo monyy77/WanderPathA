@@ -20,11 +20,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.models import ChatRequest, ChatResponse
 from api.agent_router import AgentRouter
 
+
 app = FastAPI(
     title="WanderPathA User Platform API",
     version="1.0.0",
     description="Unified API for WanderPathA AI Agents",
 )
+
 
 # -------------------------------------------------------
 # CORS
@@ -38,11 +40,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # -------------------------------------------------------
 # Router
 # -------------------------------------------------------
 
 router = AgentRouter()
+
 
 # -------------------------------------------------------
 # Health Check
@@ -50,17 +54,22 @@ router = AgentRouter()
 
 @app.get("/")
 async def root():
+
     return {
         "service": "WanderPathA User Platform API",
         "status": "running",
     }
 
 
+
 @app.get("/health")
 async def health():
+
     return {
         "status": "healthy",
     }
+
+
 
 # -------------------------------------------------------
 # Available Agents
@@ -70,32 +79,44 @@ async def health():
 async def list_agents():
 
     return [
+
         {
             "id": "memory",
             "name": "Memory Agent",
-            "description": "Conversation memory and customer context",
+            "description":
+                "Conversation memory and customer context",
         },
+
         {
             "id": "planning",
             "name": "Planning Agent",
-            "description": "Task decomposition and planning",
+            "description":
+                "Task decomposition and planning",
         },
+
         {
             "id": "flight",
             "name": "Flight Agent",
-            "description": "Flight rebooking workflows",
+            "description":
+                "Flight rebooking workflows",
         },
+
         {
             "id": "refund",
             "name": "Refund Agent",
-            "description": "Refund workflows",
+            "description":
+                "Refund workflows",
         },
+
         {
             "id": "vip",
             "name": "VIP Agent",
-            "description": "VIP trip customization",
+            "description":
+                "VIP trip customization",
         },
     ]
+
+
 
 # -------------------------------------------------------
 # Chat Endpoint
@@ -109,24 +130,40 @@ async def chat(request: ChatRequest):
 
     try:
 
-        result = await router.route(
-            agent_id=request.agent_id,
-            message=request.message,
-            session_id=request.session_id,
-            customer_id=request.customer_id,
+        result = router.route(
+            {
+                "agent": request.agent_id,
+                "message": request.message,
+                "session_id": request.session_id,
+                "customer_id": request.customer_id,
+            }
         )
 
+
         return ChatResponse(
+
             agent_id=request.agent_id,
+
             session_id=request.session_id,
-            response=result.get("response", ""),
-            execution=result.get(
-                "execution",
-                {
-                    "status": "completed",
-                },
+
+            response=result.get(
+                "result",
+                ""
             ),
+
+            execution={
+                "status": result.get(
+                    "status",
+                    "completed",
+                ),
+
+                "agent": result.get(
+                    "agent",
+                    request.agent_id,
+                ),
+            },
         )
+
 
     except ValueError as exc:
 
@@ -135,12 +172,15 @@ async def chat(request: ChatRequest):
             detail=str(exc),
         )
 
+
     except Exception as exc:
 
         raise HTTPException(
             status_code=500,
             detail=f"Internal server error: {str(exc)}",
         )
+
+
 
 # -------------------------------------------------------
 # Local Development
