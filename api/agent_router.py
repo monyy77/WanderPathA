@@ -1,22 +1,27 @@
 """
 WanderPathA Agent Router
 
-Central routing layer between User Platform
-and autonomous agents / state graphs.
-"""
+Intelligent routing layer.
 
+User message
+      |
+Classifier
+      |
+Agent selection
+      |
+Execution
+"""
 
 from planning.planning_agent import run_planning_agent
 
 
-# Memory Agent
+# Optional imports
 try:
     from agent.agent import run_agent
 except Exception:
     run_agent = None
 
 
-# Flight Graph
 try:
     from state_graph.graphs.flight_rebooking import (
         run_flight_rebooking_graph
@@ -25,7 +30,6 @@ except Exception:
     run_flight_rebooking_graph = None
 
 
-# Refund Graph
 try:
     from state_graph.graphs.refund import (
         run_refund_graph
@@ -34,7 +38,6 @@ except Exception:
     run_refund_graph = None
 
 
-# VIP Graph
 try:
     from state_graph.graphs.vip import (
         run_vip_graph
@@ -45,9 +48,6 @@ except Exception:
 
 
 class AgentRouter:
-    """
-    Routes requests to the correct autonomous component.
-    """
 
 
     def __init__(self):
@@ -72,32 +72,24 @@ class AgentRouter:
 
 
 
+    # =================================================
+    # Main Router
+    # =================================================
+
     def route(self, request: dict):
-        """
-        Main entry point.
 
-        Expected:
 
-        {
-            "agent": "planning",
-            "message": "...",
-            "session_id": "...",
-            "customer_id": "..."
-        }
-
-        """
-
-        agent_id = request.get(
-            "agent",
-            "planning"
+        message = request.get(
+            "message",
+            ""
         )
 
 
-        if agent_id not in self.agents:
+        # Intelligent Classification
 
-            raise ValueError(
-                f"Unknown agent: {agent_id}"
-            )
+        agent_id = self.classify(
+            message
+        )
 
 
         return self.agents[agent_id](
@@ -106,16 +98,128 @@ class AgentRouter:
 
 
 
-    # -------------------------------------------------
-    # Planning Agent
-    # -------------------------------------------------
+    # =================================================
+    # Classifier
+    # =================================================
+
+    def classify(self, message: str):
+
+
+        text = message.lower()
+
+
+
+        # -------------------------------
+        # Memory
+        # -------------------------------
+
+        memory_keywords = [
+
+            "remember",
+            "forget",
+            "my preference",
+            "preferred",
+            "usually",
+            "save my",
+        ]
+
+
+        if any(
+            word in text
+            for word in memory_keywords
+        ):
+
+            return "memory"
+
+
+
+        # -------------------------------
+        # Refund
+        # -------------------------------
+
+        refund_keywords = [
+
+            "refund",
+            "money back",
+            "compensation",
+            "reimbursement",
+        ]
+
+
+        if any(
+            word in text
+            for word in refund_keywords
+        ):
+
+            return "refund"
+
+
+
+        # -------------------------------
+        # Flight
+        # -------------------------------
+
+        flight_keywords = [
+
+            "flight",
+            "cancelled",
+            "canceled",
+            "delayed",
+            "rebook",
+            "reschedule",
+        ]
+
+
+        if any(
+            word in text
+            for word in flight_keywords
+        ):
+
+            return "flight"
+
+
+
+        # -------------------------------
+        # VIP
+        # -------------------------------
+
+        vip_keywords = [
+
+            "vip",
+            "upgrade",
+            "business class",
+            "luxury",
+            "premium",
+        ]
+
+
+        if any(
+            word in text
+            for word in vip_keywords
+        ):
+
+            return "vip"
+
+
+
+        # -------------------------------
+        # Default
+        # -------------------------------
+
+        return "planning"
+
+
+
+    # =================================================
+    # Agents
+    # =================================================
+
 
     def run_planning(self, request):
 
         result = run_planning_agent(
             request["message"]
         )
-
 
         return {
 
@@ -128,16 +232,12 @@ class AgentRouter:
 
 
 
-    # -------------------------------------------------
-    # Memory Agent
-    # -------------------------------------------------
-
     def run_memory(self, request):
 
         if run_agent is None:
 
             raise RuntimeError(
-                "Memory Agent is not available"
+                "Memory Agent unavailable"
             )
 
 
@@ -157,16 +257,12 @@ class AgentRouter:
 
 
 
-    # -------------------------------------------------
-    # Flight Graph
-    # -------------------------------------------------
-
     def run_flight(self, request):
 
         if run_flight_rebooking_graph is None:
 
             raise RuntimeError(
-                "Flight Graph is not available"
+                "Flight Graph unavailable"
             )
 
 
@@ -186,16 +282,12 @@ class AgentRouter:
 
 
 
-    # -------------------------------------------------
-    # Refund Graph
-    # -------------------------------------------------
-
     def run_refund(self, request):
 
         if run_refund_graph is None:
 
             raise RuntimeError(
-                "Refund Graph is not available"
+                "Refund Graph unavailable"
             )
 
 
@@ -215,16 +307,12 @@ class AgentRouter:
 
 
 
-    # -------------------------------------------------
-    # VIP Graph
-    # -------------------------------------------------
-
     def run_vip(self, request):
 
         if run_vip_graph is None:
 
             raise RuntimeError(
-                "VIP Graph is not available"
+                "VIP Graph unavailable"
             )
 
 
