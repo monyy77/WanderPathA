@@ -11,6 +11,8 @@ POST /api/chat
         |
 AgentRouter
         |
+Classifier
+        |
 Planning / Memory / Flight / Refund / VIP
 """
 
@@ -130,37 +132,56 @@ async def chat(request: ChatRequest):
 
     try:
 
+        # Intelligent Routing:
+        # User sends only the message.
+        # AgentRouter classifies automatically.
+
         result = router.route(
             {
-                "agent": request.agent_id,
                 "message": request.message,
-                "session_id": request.session_id,
-                "customer_id": request.customer_id,
+
+                "session_id":
+                    request.session_id,
+
+                "customer_id":
+                    request.customer_id,
             }
         )
 
 
         return ChatResponse(
 
-            agent_id=request.agent_id,
+            # Agent selected by Classifier
+
+            agent_id=result.get(
+                "agent",
+                "unknown",
+            ),
+
 
             session_id=request.session_id,
 
+
             response=result.get(
                 "result",
-                ""
+                "",
             ),
 
-            execution={
-                "status": result.get(
-                    "status",
-                    "completed",
-                ),
 
-                "agent": result.get(
-                    "agent",
-                    request.agent_id,
-                ),
+            execution={
+
+                "status":
+                    result.get(
+                        "status",
+                        "completed",
+                    ),
+
+
+                "agent":
+                    result.get(
+                        "agent",
+                        "unknown",
+                    ),
             },
         )
 
