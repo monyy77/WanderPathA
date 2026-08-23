@@ -114,11 +114,14 @@ def scenario_rebook_with_cycle():
     result = start_run(
         run_id,
         {
-            "flight_id": 103,
-            "customer_id": 3,
-            "customer_is_vip": True,
-            "connected_services": ["hotel_transfer"],
-        },
+    "flight_id": 3,
+    "customer_id": 3,
+    "customer_is_vip": True,
+    "connected_services": ["hotel_transfer"],
+    "origin_airport": "DXB",
+    "destination_airport": "LHR",
+    "departure_date": "2026-08-03",
+},
     )
     state = result["state"]
     state["customer_response"] = "rebook"
