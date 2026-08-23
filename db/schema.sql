@@ -156,6 +156,19 @@ CREATE TABLE RegisteredTools (
     INDEX idx_is_active (is_active)
 );
 
+CREATE TABLE IF NOT EXISTS FailureTickets (
+    ticket_id INT AUTO_INCREMENT PRIMARY KEY,
+    run_id VARCHAR(255) NOT NULL,
+    failed_node VARCHAR(100) NOT NULL,
+    error_message TEXT NOT NULL,
+    status ENUM('open', 'investigating', 'resolved') DEFAULT 'open',
+    resolution_notes TEXT NULL,
+    checkpoint_id INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    resolved_at TIMESTAMP NULL,
+    FOREIGN KEY (checkpoint_id) REFERENCES GraphCheckpoints(checkpoint_id)
+);
+
 -- Seed data: register the tools that already exist in tools/ so the
 -- registry reflects reality from day one, rather than starting empty
 -- and pretending no tools exist until someone registers them by hand.

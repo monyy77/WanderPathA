@@ -194,3 +194,16 @@ def self_rag(question: str) -> str:
     inputs = {"question": question, "loop_step": 0}
     output = self_rag_app.invoke(inputs)
     return output.get("generation", "No valid response generated.")
+
+def self_rag_with_sources(question: str) -> dict:
+    inputs = {
+        "question": question,
+        "loop_step": 0,
+    }
+
+    output = self_rag_app.invoke(inputs)
+
+    return {
+        "answer": output.get("generation", ""),
+        "documents": output.get("documents", []),
+    }
