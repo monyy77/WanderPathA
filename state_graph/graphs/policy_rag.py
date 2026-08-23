@@ -26,106 +26,49 @@ is flagged as a follow-up, not silently left as a permanent duplicate.
 """
 
 from typing import Any
-
+from rag.self_rag import self_rag
+from rag.self_rag import self_rag_with_sources
+from rag.hybrid_rag import hybrid_retrieve
 # Wanderpath's refund/compensation policy, as short, retrievable chunks.
 # In a full RAG setup this would live in the shared vector store built
 # by the Memory & RAG agent; kept as plain text here so this node has
-# something real to retrieve and cite rather than the model guessing.
-POLICY_DOCUMENTS = [
-    {
-        "id": "refund-001",
-        "text": (
-            "Customers whose flight is cancelled by the airline are "
-            "entitled to a full refund of the ticket price, regardless "
-            "of ticket type (economy, premium, or business)."
-        ),
-    },
-    {
-        "id": "refund-002",
-        "text": (
-            "Refunds under $500 are processed automatically within 3-5 "
-            "business days. Refunds of $500 or more require manual "
-            "approval from a customer service agent before processing, "
-            "due to the higher financial impact of large reversals."
-        ),
-    },
-    {
-        "id": "compensation-001",
-        "text": (
-            "VIP customers who experience a cancellation are eligible "
-            "for a complimentary seat upgrade on their rebooked flight, "
-            "subject to availability, at no additional cost."
-        ),
-    },
-    {
-        "id": "compensation-002",
-        "text": (
-            "Non-VIP customers are not automatically eligible for a "
-            "seat upgrade on rebooking; upgrades may still be offered "
-            "at the discretion of a customer service agent."
-        ),
-    },
-]
-
-
-def retrieve_policy(query_terms: list[str]) -> list[dict[str, Any]]:
-    """
-    Simple keyword-overlap retriever: returns policy documents whose
-    text contains any of the given query terms, ranked by how many
-    terms matched. This is intentionally simple (no embeddings) since
-    the policy set is small and fixed - the point of this node is to
-    ground the decision in real text, not to build a search engine.
-
-    Returns a list of matched documents, most relevant first. Each
-    result is a dict with "id", "text", and "match_count" so the
-    caller can cite exactly which policy chunk was used.
-    """
-    query_terms_lower = [t.lower() for t in query_terms]
-
-    scored = []
-    for doc in POLICY_DOCUMENTS:
-        text_lower = doc["text"].lower()
-        match_count = sum(1 for term in query_terms_lower if term in text_lower)
-        if match_count > 0:
-            scored.append({**doc, "match_count": match_count})
-
-    scored.sort(key=lambda d: d["match_count"], reverse=True)
-    return scored
-
+# something real to retrieve  rather than the model guessing.
 
 def get_refund_policy_for(state: dict[str, Any]) -> dict[str, Any]:
-    """
-    Retrieves the specific policy chunks relevant to this customer's
-    refund case, and returns a small grounded summary the node can
-    act on - not the model's own guess, but a real citation.
 
-    Returns:
-        {
-            "refund_amount": float,
-            "auto_approved": bool,
-            "vip_upgrade_eligible": bool,
-            "cited_policy_ids": list[str],
-        }
-    """
     is_vip = bool(state.get("customer_is_vip", False))
     refund_amount = float(state.get("refund_amount", 0.0))
 
-    query_terms = ["refund"]
-    if is_vip:
-        query_terms.append("vip")
+    question = f"""
+    Determine the refund policy for this customer case.
 
-    matches = retrieve_policy(query_terms)
-    cited_ids = [m["id"] for m in matches]
+    Refund amount: {refund_amount}
+    Customer VIP: {is_vip}
 
-    # Ground the decision in the retrieved threshold policy
-    # (refund-002), not a number pulled from nowhere.
-    auto_approved = refund_amount < 500.0
+    Identify:
+    1. Whether the refund requires human approval.
+    2. Whether the customer is eligible for compensation or upgrade.
+    3. Which policy documents support the decision.
+    """
 
-    vip_upgrade_eligible = is_vip
+    rag_result = self_rag_with_sources(question)
+
+    documents = rag_result["documents"]
+
+    cited_policy_ids = []
+
+    for doc in documents:
+        # لو metadata متاحة
+        if isinstance(doc, dict):
+            source = doc.get("source") or doc.get("id")
+            if source:
+                cited_policy_ids.append(source)
 
     return {
         "refund_amount": refund_amount,
-        "auto_approved": auto_approved,
-        "vip_upgrade_eligible": vip_upgrade_eligible,
-        "cited_policy_ids": cited_ids,
+        "auto_approved": refund_amount < 500.0,
+        "vip_upgrade_eligible": is_vip,
+        "cited_policy_ids": cited_policy_ids,
+        "policy_answer": rag_result["answer"],
+        "retrieved_documents": documents,
     }
