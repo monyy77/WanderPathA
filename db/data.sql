@@ -1,4 +1,4 @@
-USE travel_agency;
+USE wanderpath_db;
 
 
 INSERT INTO Airports

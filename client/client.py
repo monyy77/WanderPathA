@@ -96,7 +96,7 @@ async def create_client():
             "wanderpath_server": {
                 "transport": "stdio",
                 "command": sys.executable,
-                "args": [path_to_mcp_server, "stdio"],
+                "args": ["-m", "server.server", "stdio"],
             }
         }
     elif mode == "http":
@@ -161,13 +161,46 @@ async def create_client():
                     print(f"- {tool.name}")
                     if tool.description:
                         print(f"  {tool.description}")
-            else:
-                print("Server supports tools, but no tools are registered.")
+                else:
+                    print("Server supports tools, but no tools are registered.")
             create_client.last_tools = tools
 
         print("\nFinished.")
         return client
 
+async def call_mcp_tool(tool_name: str, arguments: dict):
+    if mode == "stdio":
+        server_params = {
+            "wanderpath_server": {
+                "transport": "stdio",
+                "command": sys.executable,
+                "args": [path_to_mcp_server, "stdio"],
+            }
+        }
+    else:
+        server_params = {
+            "wanderpath_server": {
+                "transport": "http",
+                "url": "http://127.0.0.1:8000/mcp",
+            }
+        }
 
+    client = MultiServerMCPClient(
+        server_params,
+        callbacks=callbacks,
+    )
+
+    async with client.session("wanderpath_server") as session:
+        tools = await load_mcp_tools(session)
+
+        tool = next(
+            (t for t in tools if t.name == tool_name),
+            None,
+        )
+
+        if tool is None:
+            raise ValueError(f"MCP tool not found: {tool_name}")
+
+        return await tool.ainvoke(arguments)
 if __name__ == "__main__":
     asyncio.run(create_client())

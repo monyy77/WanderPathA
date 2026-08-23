@@ -4,75 +4,121 @@ state_graph/graphs/task_decomposition.py
 Task decomposition for the flight-rebooking graph (Issue #3).
 Owner: Person 1
 
-WHY THIS NODE NEEDS TASK DECOMPOSITION (not ToT/LATS/ReAct):
-Rebooking a cancelled flight is not one action - it's an ordered
-sequence of sub-steps that all have to happen for the customer to
-actually be taken care of: cancel the old booking, search for a new
-flight, rebook anything connected to the old flight (hotel transfers,
-car pickups), and notify the customer. There's no need to search over
-multiple possible orderings (that's what Tree of Thoughts/LATS are
-for) - the order here is fixed and known in advance. There's also no
-external tool-calling loop needed at the decomposition step itself
-(that's what constrained ReAct is for) - decomposition just produces
-the plan; execution of each step happens elsewhere. That's why
-decomposition is the right fit here, not the other three techniques.
+=== CORRECTION ===
+The previous version of this file invented its own hardcoded step list
+instead of calling the team's actual decomposition engine
+(planning/decomposition.py: decompose_goal), even though this was not
+the team's first use of task decomposition. That is fixed here.
+
+WHERE THE LLM COMES FROM: planning/planning_agent.py's build_llm()
+(init_chat_model("mistral-large-latest", ...)) is reused directly -
+not a new LLM setup. WHERE TOOL NAMES COME FROM: rather than
+planning_agent.py's discover_tools() (async, requires a live MCP
+client connection - too heavy to invoke from inside a single graph
+node), this uses server.tool_registry.list_active_tools(), which is
+this project's actual live source of truth for "what tools currently
+exist and are active" (Issue #4/#5) and is already synchronous.
+
+WHAT IS STILL NOT CALLED, AND WHY: execute_plan() (also in
+planning/decomposition.py) runs every batch of a plan straight through
+with no way to pause mid-plan. This graph needs search_new_flight to
+be able to stop and wait on the airline's real response for hours,
+then resume from a checkpoint - not re-run the whole plan from the
+top. So decompose_goal() is reused as-is to PRODUCE the plan, and this
+graph's own nodes (in flight_rebooking.py) execute each TOOL_CALL step
+one at a time against the real MCP tools, which is what allows
+checkpointing between steps.
 """
 
 from typing import Any
 
+from planning.dag import Plan
+from planning.decomposition import decompose_goal
+from planning.planning_agent import build_llm
+from server.tool_registry import list_active_tools
 
-def decompose_rebooking_task(state: dict[str, Any]) -> list[dict[str, Any]]:
-    """
-    Builds the ordered list of sub-steps needed to fully rebook a
-    disrupted flight. This runs once, when we first enter
-    search_alternatives, and the resulting plan is stored in the
-    graph's state so it survives a checkpoint/resume cycle - we don't
-    want to re-decompose the task from scratch after a crash.
 
-    Returns a list of steps, each with a status we update as we go:
-        [
-            {"step": "cancel_old_booking", "status": "pending"},
-            {"step": "search_new_flight", "status": "pending"},
-            {"step": "rebook_connected_services", "status": "pending"},
-            {"step": "notify_customer_of_new_flight", "status": "pending"},
-        ]
+def decompose_rebooking_task(state: dict[str, Any]) -> Plan:
     """
+    Builds the real DAG for rebooking a disrupted flight by calling
+    the team's actual decompose_goal() - not a hand-written step list.
+
+    This runs once, when we first enter decompose_rebooking. The
+    resulting Plan is converted to a plain dict (see plan_to_state_dict)
+    and stored in the graph's checkpointed state, so it survives a
+    crash/resume cycle without re-calling the LLM.
+    """
+    flight_id = state.get("flight_id")
     has_connected_services = bool(state.get("connected_services"))
 
-    steps = [
-        {"step": "cancel_old_booking", "status": "pending"},
-        {"step": "search_new_flight", "status": "pending"},
-    ]
-
-    # Only include this step if the booking actually has connected
-    # services (e.g. a hotel transfer tied to the old arrival time) -
-    # no point planning a step that has nothing to do.
-    if has_connected_services:
-        steps.append(
-            {"step": "rebook_connected_services", "status": "pending"}
+    goal = (
+        f"Rebook the customer affected by disrupted flight {flight_id}: "
+        f"cancel the old booking, search for a new flight"
+        + (
+            ", rebook any connected services (e.g. hotel transfers)"
+            if has_connected_services
+            else ""
         )
-
-    steps.append(
-        {"step": "notify_customer_of_new_flight", "status": "pending"}
+        + ", and notify the customer of the new flight."
     )
 
-    return steps
+    llm = build_llm()
+    active_tools = list_active_tools(agent_name="flight_rebooking")
+    tool_names = [t["tool_name"] for t in active_tools]
+
+    plan = decompose_goal(
+    goal=goal,
+    llm=llm,
+    tool_names=tool_names,
+)
+
+    return plan_to_state_dict(plan)
+
+def plan_to_state_dict(plan: Plan) -> list[dict[str, Any]]:
+    """
+    Converts the real Plan (from decompose_goal) into a plain,
+    JSON-serializable list for storage in the checkpointed state -
+    Plan/Task are pydantic models with an Enum field (TaskType), which
+    needs converting to a plain string before it can go into
+    checkpointer.save_checkpoint().
+    """
+    return [
+    {
+        "id": task.id,
+        "step": task.instruction,
+        "depends_on": task.depends_on,
+        "kind": task.kind.value,
+        "tool_name": task.tool_name,
+        "status": "pending",
+    }
+    for task in plan.tasks
+    ]
 
 
-def mark_step_done(state: dict[str, Any], step_name: str) -> dict[str, Any]:
-    """Marks one sub-step of the decomposition plan as completed, and
-    returns the updated state. Keeping this as a pure function (returns
-    a new state rather than mutating) matches how the rest of the graph
-    nodes work, so it's safe to call from inside a node."""
+def mark_step_done(state: dict[str, Any], task_id: str) -> dict[str, Any]:
+    """Marks one task in the stored plan as completed, and returns the
+    updated state (pure function, matches the rest of the graph's node
+    style)."""
     plan = state.get("rebooking_plan", [])
     updated_plan = [
-        {**s, "status": "done"} if s["step"] == step_name else s
-        for s in plan
+        {**t, "status": "done"} if t["id"] == task_id else t
+        for t in plan
     ]
     return {**state, "rebooking_plan": updated_plan}
 
 
-def all_steps_done(state: dict[str, Any]) -> bool:
-    """Checks whether every step in the decomposition plan is done."""
+def get_next_tool_call_task(state: dict[str, Any]) -> dict[str, Any] | None:
+    """Finds the next pending TOOL_CALL task in the stored plan - this
+    is how flight_rebooking.py's nodes know which real MCP tool to
+    call next."""
     plan = state.get("rebooking_plan", [])
-    return len(plan) > 0 and all(s["status"] == "done" for s in plan)
+    for task in plan:
+        if task["kind"] == "tool_call" and task["status"] == "pending":
+            return task
+    return None
+
+
+def all_steps_done(state: dict[str, Any]) -> bool:
+    """Checks whether every task in the stored plan is done."""
+    plan = state.get("rebooking_plan", [])
+    return len(plan) > 0 and all(t["status"] == "done" for t in plan)

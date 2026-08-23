@@ -60,7 +60,10 @@ from state_graph.graphs.task_decomposition import (
     decompose_rebooking_task,
     mark_step_done,
 )
+from tools.booking_tools import get_flight_options
 from state_graph.graphs.policy_rag import get_refund_policy_for
+import asyncio
+from state_graph.mcp_tools import call_mcp_tool
 
 GRAPH_NAME = "flight_rebooking"
 
@@ -146,22 +149,65 @@ def node_decompose_rebooking(state: dict[str, Any]) -> tuple[str, dict[str, Any]
     """
     if state.get("rebooking_plan") is None:
         plan = decompose_rebooking_task(state)
-        state = {**state, "rebooking_plan": plan}
 
+    if hasattr(plan, "model_dump"):
+        plan = plan.model_dump()
+    elif hasattr(plan, "__dict__"):
+        plan = plan.__dict__
+
+    state = {**state, "rebooking_plan": plan}
+    
     return "search_alternatives", state
 
+def node_search_alternatives(state):
+    """Search for a real alternative flight through MCP."""
+    import asyncio
+    origin = state.get("origin_airport")
+    destination = state.get("destination_airport")
+    departure_date = state.get("departure_date")
 
-def node_search_alternatives(state: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-    """Look for an alternative flight (the 'search_new_flight' step of
-    the decomposition plan). Sets a proposed alternative and moves to
-    waiting on the airline's confirmation.
-    (Actual search is a TODO for MCP tool integration - Issue #5.)"""
-    # TODO(Issue #5): replace with real MCP flight-search tool call.
-    proposed = {"flight_number": "WP-PLACEHOLDER", "seat": "economy"}
-    state = {**state, "proposed_alternative": proposed}
-    state = mark_step_done(state, "search_new_flight")
+    options = asyncio.run(
+        call_mcp_tool(
+            "get_flight_options",
+            originSkyId=origin,
+            destinationSkyId=destination,
+            departureDate=departure_date,
+        )
+    )
+
+    # MCP may return an error object instead of flight options
+    if not isinstance(options, list) or (
+        options and isinstance(options[0], dict) and "text" in options[0]
+    ):
+        raise RuntimeError(f"MCP get_flight_options failed: {options}")
+
+    already_tried = {
+        alt.get("flight_number")
+        for alt in state.get("alternatives_tried", [])
+        if alt
+    }
+
+    proposed = next(
+        (
+            opt for opt in options
+            if opt.get("flight_number") not in already_tried
+        ),
+        None,
+    )
+
+    if proposed is None:
+        state = {
+            **state,
+            "final_outcome": "no_alternatives_available",
+        }
+        return "end", state
+
+    state = {
+        **state,
+        "proposed_alternative": proposed,
+    }
+
     return "awaiting_airline_response", state
-
 
 def node_awaiting_airline_response(
     state: dict[str, Any]
