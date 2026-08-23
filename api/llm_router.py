@@ -1,33 +1,46 @@
 """
-LLM Router
+MCP Aware LLM Router
 
-Uses LLM for intelligent agent selection.
-
-The output is always validated
-against MCP allowed agents.
+LLM chooses only from
+runtime discovered MCP capabilities.
 """
 
 
 import json
 
 
-from api.agent_registry import (
-    AVAILABLE_AGENTS,
-    get_agents_description,
-)
+from api.mcp_registry import MCPRegistry
 
 
 
 class LLMRouter:
 
 
-    def __init__(self, llm=None):
+    def __init__(
+        self,
+        llm=None,
+        mcp_registry=None
+    ):
 
         self.llm = llm
 
+        self.mcp_registry = (
+            mcp_registry
+            or MCPRegistry()
+        )
 
 
-    def classify(self, message: str):
+
+    def classify(self, message):
+
+
+        capabilities = (
+
+            self.mcp_registry
+            .get_capabilities_prompt()
+
+        )
+
 
 
         if self.llm is None:
@@ -38,16 +51,16 @@ class LLMRouter:
 
         prompt = f"""
 
-You are an agent router.
+You are a routing agent.
 
-Choose exactly one agent.
+Select ONE capability.
 
-Available agents:
+Available MCP capabilities:
 
-{get_agents_description()}
+{capabilities}
 
 
-User message:
+User request:
 
 {message}
 
@@ -55,15 +68,18 @@ User message:
 Return ONLY JSON:
 
 {{
-"agent":"agent_name"
+"capability":
+"exact_name_from_list"
 }}
 
 """
 
 
+
         response = self.llm.invoke(
             prompt
         )
+
 
 
         try:
@@ -73,14 +89,26 @@ Return ONLY JSON:
             )
 
 
-            agent = data.get(
-                "agent"
+            capability = data.get(
+                "capability"
             )
 
 
-            if agent in AVAILABLE_AGENTS:
+            available = [
 
-                return agent
+                item["name"]
+
+                for item
+
+                in self.mcp_registry
+                .list_capabilities()
+
+            ]
+
+
+            if capability in available:
+
+                return capability
 
 
 
