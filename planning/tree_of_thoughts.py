@@ -2,7 +2,6 @@ import json
 
 from typing import Any
 
-
 from planning.plan_and_solve import _clean_json_response
 from planning.schema import (
     PlannerResult,
@@ -10,6 +9,10 @@ from planning.schema import (
     ThoughtNode
 )
 
+from planning.tool_registry import MCPToolRegistry
+
+
+NUM_THOUGHTS = 3
 
 
 class TreeOfThoughtsPlanner:
@@ -18,7 +21,7 @@ class TreeOfThoughtsPlanner:
     def __init__(
         self,
         llm,
-        tool_registry
+        tool_registry: MCPToolRegistry
     ):
 
         self.llm = llm
@@ -44,7 +47,7 @@ class TreeOfThoughtsPlanner:
         {subtask}
 
 
-        Generate 3 different solutions.
+        Generate {NUM_THOUGHTS} different solutions.
 
 
         Each solution must contain:
@@ -54,26 +57,48 @@ class TreeOfThoughtsPlanner:
         - args
 
 
+        Each solution must represent a genuinely different strategy.
+
+        Avoid producing trivial variations.
+
+
         Return ONLY valid JSON array.
 
+
         REAL MCP TOOLS:
+
         {list(self.tool_registry.tools.keys())}
 
+
         Use ONLY these tools.
+
         Never invent a tool name.
-            
 
         """
 
 
-        response = self.llm.invoke(
+        response = await self.llm.ainvoke(
             prompt
         )
 
 
         try:
-            cleaned = _clean_json_response(response.content)
-            data = json.loads(cleaned)
+
+            cleaned = _clean_json_response(
+                response.content
+            )
+
+            data = json.loads(
+                cleaned
+            )
+
+
+            if not isinstance(
+                data,
+                list
+            ):
+                return []
+
 
         except Exception:
 
@@ -86,13 +111,19 @@ class TreeOfThoughtsPlanner:
 
         for i, item in enumerate(data):
 
+
             thoughts.append(
 
                 ThoughtNode(
 
-                    id=chr(65+i),
+                    id=chr(
+                        65 + i
+                    ),
 
-                    description=item["description"],
+                    description=item.get(
+                        "description",
+                        "No description provided"
+                    ),
 
                     tool=item.get(
                         "tool"
@@ -109,6 +140,8 @@ class TreeOfThoughtsPlanner:
 
 
         return thoughts
+
+
 
 
 
@@ -143,19 +176,34 @@ class TreeOfThoughtsPlanner:
 
             - customer preference
 
-            Return only number.
+
+            Return ONLY a floating point number.
+
+            Example:
+
+            0.85
+
 
             """
 
 
-
-            response =  self.llm.invoke(
+            response = await self.llm.ainvoke(
                 prompt
             )
 
 
             try:
-                score_str = response.content.strip().replace("`", "")
+
+                score_str = (
+                    response.content
+                    .strip()
+                    .replace(
+                        "`",
+                        ""
+                    )
+                )
+
+
                 thought.score = float(
                     score_str
                 )
@@ -171,10 +219,19 @@ class TreeOfThoughtsPlanner:
 
 
 
+
+
     def select_best(
         self,
         thoughts: list[ThoughtNode]
     ) -> ThoughtNode:
+
+
+        if not thoughts:
+
+            raise ValueError(
+                "No thoughts available for selection."
+            )
 
 
         return max(
@@ -184,6 +241,8 @@ class TreeOfThoughtsPlanner:
             key=lambda x: x.score
 
         )
+
+
 
 
 
@@ -202,6 +261,17 @@ class TreeOfThoughtsPlanner:
 
 
 
+        if not self.tool_registry.has_tool(
+            thought.tool
+        ):
+
+            return (
+                f"Tool '{thought.tool}' "
+                "is not available in MCP registry."
+            )
+
+
+
         return await self.tool_registry.execute(
 
             thought.tool,
@@ -212,11 +282,13 @@ class TreeOfThoughtsPlanner:
 
 
 
+
+
     async def run(
         self,
         task_id: str,
         subtask: str,
-        
+
     ) -> PlannerResult:
 
 
@@ -247,7 +319,9 @@ class TreeOfThoughtsPlanner:
         # 2. Evaluate branches
 
         evaluated = await self.evaluate_thoughts(
+
             thoughts
+
         )
 
 
@@ -255,16 +329,24 @@ class TreeOfThoughtsPlanner:
         # 3. Select best branch
 
         best = self.select_best(
+
             evaluated
+
         )
 
 
 
         # 4. Execute winner
 
-        result = await self.execute(best)
+        result = await self.execute(
+
+            best
+
+        )
+
 
         tool_calls = []
+
 
 
         if best.tool:
@@ -272,6 +354,7 @@ class TreeOfThoughtsPlanner:
             tool_calls.append(
 
                 {
+
                     "tool": best.tool,
 
                     "args": best.args
@@ -293,6 +376,7 @@ class TreeOfThoughtsPlanner:
             output=str(result),
 
             tool_calls=tool_calls,
+
 
             metadata={
 
@@ -316,9 +400,20 @@ class TreeOfThoughtsPlanner:
                     ],
 
 
+
                 "selected_path":
 
-                    best.id
+                    best.id,
+
+
+                "selected_tool":
+
+                    best.tool,
+
+
+                "selected_score":
+
+                    best.score
 
             }
 
