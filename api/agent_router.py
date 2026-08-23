@@ -5,70 +5,113 @@ Intelligent routing layer.
 
 User message
       |
-Classifier
+      v
+LLM Router
       |
-Agent selection
+      v
+Agent Validation
       |
-Execution
+      v
+Fallback Keyword Router (if needed)
+      |
+      v
+Agent execution
 """
 
 from planning.planning_agent import run_planning_agent
 
 
-# Optional imports
+from api.llm_router import LLMRouter
+from api.agent_registry import is_allowed_agent
+
+
+
+# -------------------------------------------------
+# Optional Imports
+# -------------------------------------------------
+
 try:
     from agent.agent import run_agent
+
 except Exception:
+
     run_agent = None
+
 
 
 try:
     from state_graph.graphs.flight_rebooking import (
         run_flight_rebooking_graph
     )
+
 except Exception:
+
     run_flight_rebooking_graph = None
+
 
 
 try:
     from state_graph.graphs.refund import (
         run_refund_graph
     )
+
 except Exception:
+
     run_refund_graph = None
+
 
 
 try:
     from state_graph.graphs.vip import (
         run_vip_graph
     )
+
 except Exception:
+
     run_vip_graph = None
+
 
 
 
 class AgentRouter:
 
 
-    def __init__(self):
+    def __init__(self, llm=None):
+
+
+        # LLM based classifier
+
+        self.llm_router = LLMRouter(
+            llm
+        )
+
+
+        # Allowed execution routes
 
         self.agents = {
+
 
             "planning":
                 self.run_planning,
 
+
             "memory":
                 self.run_memory,
+
 
             "flight":
                 self.run_flight,
 
+
             "refund":
                 self.run_refund,
 
+
             "vip":
                 self.run_vip,
+
         }
+
 
 
 
@@ -85,11 +128,21 @@ class AgentRouter:
         )
 
 
-        # Intelligent Classification
+        # Select agent
 
         agent_id = self.classify(
             message
         )
+
+
+        # Extra validation
+
+        if not is_allowed_agent(
+            agent_id
+        ):
+
+            agent_id = "planning"
+
 
 
         return self.agents[agent_id](
@@ -98,11 +151,57 @@ class AgentRouter:
 
 
 
+
+
     # =================================================
-    # Classifier
+    # Intelligent Classifier
     # =================================================
 
     def classify(self, message: str):
+
+
+        # -------------------------------
+        # First: LLM Router
+        # -------------------------------
+
+        agent = self.llm_router.classify(
+            message
+        )
+
+
+
+        if (
+
+            agent
+
+            and
+
+            is_allowed_agent(agent)
+
+        ):
+
+            return agent
+
+
+
+
+        # -------------------------------
+        # Second: Fallback
+        # -------------------------------
+
+        return self.keyword_fallback(
+            message
+        )
+
+
+
+
+
+    # =================================================
+    # Keyword Fallback
+    # =================================================
+
+    def keyword_fallback(self, message):
 
 
         text = message.lower()
@@ -110,48 +209,26 @@ class AgentRouter:
 
 
         # -------------------------------
-        # Memory
-        # -------------------------------
-
-        memory_keywords = [
-
-            "remember",
-            "forget",
-            "my preference",
-            "preferred",
-            "usually",
-            "save my",
-        ]
-
-
-        if any(
-            word in text
-            for word in memory_keywords
-        ):
-
-            return "memory"
-
-
-
-        # -------------------------------
         # Refund
         # -------------------------------
 
-        refund_keywords = [
-
-            "refund",
-            "money back",
-            "compensation",
-            "reimbursement",
-        ]
-
-
         if any(
+
             word in text
-            for word in refund_keywords
+
+            for word in [
+
+                "refund",
+                "compensation",
+                "money back",
+                "reimbursement",
+
+            ]
+
         ):
 
             return "refund"
+
 
 
 
@@ -159,23 +236,50 @@ class AgentRouter:
         # Flight
         # -------------------------------
 
-        flight_keywords = [
-
-            "flight",
-            "cancelled",
-            "canceled",
-            "delayed",
-            "rebook",
-            "reschedule",
-        ]
-
-
         if any(
+
             word in text
-            for word in flight_keywords
+
+            for word in [
+
+                "flight",
+                "cancelled",
+                "canceled",
+                "delayed",
+                "rebook",
+                "reschedule",
+
+            ]
+
         ):
 
             return "flight"
+
+
+
+
+        # -------------------------------
+        # Memory
+        # -------------------------------
+
+        if any(
+
+            word in text
+
+            for word in [
+
+                "remember",
+                "forget",
+                "preference",
+                "prefer",
+                "save my",
+
+            ]
+
+        ):
+
+            return "memory"
+
 
 
 
@@ -183,149 +287,245 @@ class AgentRouter:
         # VIP
         # -------------------------------
 
-        vip_keywords = [
-
-            "vip",
-            "upgrade",
-            "business class",
-            "luxury",
-            "premium",
-        ]
-
-
         if any(
+
             word in text
-            for word in vip_keywords
+
+            for word in [
+
+                "vip",
+                "upgrade",
+                "business class",
+                "luxury",
+                "premium",
+
+            ]
+
         ):
 
             return "vip"
 
 
 
-        # -------------------------------
+
         # Default
-        # -------------------------------
 
         return "planning"
 
 
 
-    # =================================================
-    # Agents
-    # =================================================
 
+
+    # =================================================
+    # Planning Agent
+    # =================================================
 
     def run_planning(self, request):
 
+
         result = run_planning_agent(
+
             request["message"]
+
         )
+
 
         return {
 
-            "agent": "planning",
 
-            "status": "success",
+            "agent":
+                "planning",
 
-            "result": result,
+
+            "status":
+                "success",
+
+
+            "result":
+                result,
+
         }
 
 
+
+
+
+    # =================================================
+    # Memory Agent
+    # =================================================
 
     def run_memory(self, request):
 
+
         if run_agent is None:
 
+
             raise RuntimeError(
+
                 "Memory Agent unavailable"
+
             )
+
 
 
         result = run_agent(
+
             request["message"]
+
         )
+
 
 
         return {
 
-            "agent": "memory",
 
-            "status": "success",
+            "agent":
+                "memory",
 
-            "result": result,
+
+            "status":
+                "success",
+
+
+            "result":
+                result,
+
         }
 
 
+
+
+
+    # =================================================
+    # Flight Graph
+    # =================================================
 
     def run_flight(self, request):
 
+
         if run_flight_rebooking_graph is None:
 
+
             raise RuntimeError(
+
                 "Flight Graph unavailable"
+
             )
+
 
 
         result = run_flight_rebooking_graph(
+
             request
+
         )
+
 
 
         return {
 
-            "agent": "flight",
 
-            "status": "success",
+            "agent":
+                "flight",
 
-            "result": result,
+
+            "status":
+                "success",
+
+
+            "result":
+                result,
+
         }
 
 
+
+
+
+    # =================================================
+    # Refund Graph
+    # =================================================
 
     def run_refund(self, request):
 
+
         if run_refund_graph is None:
 
+
             raise RuntimeError(
+
                 "Refund Graph unavailable"
+
             )
 
 
+
         result = run_refund_graph(
+
             request
+
         )
+
 
 
         return {
 
-            "agent": "refund",
 
-            "status": "success",
+            "agent":
+                "refund",
 
-            "result": result,
+
+            "status":
+                "success",
+
+
+            "result":
+                result,
+
         }
 
 
 
+
+
+    # =================================================
+    # VIP Graph
+    # =================================================
+
     def run_vip(self, request):
+
 
         if run_vip_graph is None:
 
+
             raise RuntimeError(
+
                 "VIP Graph unavailable"
+
             )
 
 
+
         result = run_vip_graph(
+
             request
+
         )
+
 
 
         return {
 
-            "agent": "vip",
 
-            "status": "success",
+            "agent":
+                "vip",
 
-            "result": result,
+
+            "status":
+                "success",
+
+
+            "result":
+                result,
+
         }
