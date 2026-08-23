@@ -76,3 +76,4 @@ def all_steps_done(state: dict[str, Any]) -> bool:
     """Checks whether every step in the decomposition plan is done."""
     plan = state.get("rebooking_plan", [])
     return len(plan) > 0 and all(s["status"] == "done" for s in plan)
+

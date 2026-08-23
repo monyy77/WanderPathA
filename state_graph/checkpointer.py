@@ -142,3 +142,18 @@ def load_history(run_id: str) -> list[dict[str, Any]]:
     finally:
         cursor.close()
         conn.close()
+
+
+def complete_checkpoint(
+    run_id: str,
+    graph_name: str,
+    current_node: str,
+    state: dict[str, Any],
+):
+    return save_checkpoint(
+        run_id=run_id,
+        graph_name=graph_name,
+        current_node=current_node,
+        state=state,
+        status="completed",
+    )
