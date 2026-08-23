@@ -99,15 +99,30 @@ class AgentRouter:
 
 
 
-    def __init__(self, llm=None):
+    def __init__(
+        self,
+        llm=None,
+        mcp_registry=None
+    ):
 
 
         # -----------------------------------------
         # MCP-aware LLM Router
         # -----------------------------------------
+        #
+        # LLM decides capability
+        # based on runtime MCP tools
+        #
+        # mcp_registry provides:
+        # tools/list discovery
+        #
 
         self.llm_router = LLMRouter(
-            llm
+
+            llm,
+
+            mcp_registry
+
         )
 
 
@@ -148,11 +163,6 @@ class AgentRouter:
                 self.run_vip,
 
         }
-
-
-
-
-
 
     # =================================================
     # Main Router
