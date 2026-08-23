@@ -1,89 +1,90 @@
 """
 MCP Runtime Registry
 
-Discovers available capabilities
-from MCP Server.
+Discovers tools dynamically
+from WanderPath MCP Server.
 """
+
+
+from api.mcp_client import MCPClient
+
 
 
 class MCPRegistry:
 
 
+
     def __init__(self, mcp_client=None):
 
-        self.mcp_client = mcp_client
+
+        self.mcp_client = (
+
+            mcp_client
+
+            or MCPClient()
+
+        )
+
+
 
 
 
     def list_capabilities(self):
 
-        """
-        Runtime discovery.
 
-        Later replaced by:
-        mcp_client.list_tools()
-        """
-
-        if self.mcp_client:
-
-            return self.mcp_client.list_tools()
+        tools = self.mcp_client.list_tools()
 
 
 
-        # Temporary fallback
-        # until MCP client connection exists
-
-        return [
-
-            {
-                "name": "planning_agent",
-                "description":
-                    "Creates travel plans and decomposes tasks",
-            },
+        capabilities = []
 
 
-            {
-                "name": "memory_agent",
-                "description":
-                    "Stores and retrieves customer memories",
-            },
+
+        for tool in tools:
 
 
-            {
-                "name": "flight_rebooking_graph",
-                "description":
-                    "Handles flight delays, cancellations and rebooking",
-            },
+            capabilities.append(
+
+                {
+
+                    "name":
+                        tool.name,
 
 
-            {
-                "name": "refund_graph",
-                "description":
-                    "Handles refunds and compensation",
-            },
+                    "description":
+                        tool.description,
+
+                }
+
+            )
 
 
-            {
-                "name": "vip_graph",
-                "description":
-                    "Handles VIP upgrades and premium services",
-            },
 
-        ]
+        return capabilities
+
+
 
 
 
     def get_capabilities_prompt(self):
 
 
-        tools = self.list_capabilities()
+        capabilities = (
+
+            self.list_capabilities()
+
+        )
+
 
 
         return "\n".join(
 
             [
-                f"{tool['name']}: {tool['description']}"
-                for tool in tools
+
+                f"{item['name']}: {item['description']}"
+
+                for item in capabilities
+
             ]
 
         )
