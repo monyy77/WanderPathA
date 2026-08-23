@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Any
 
 
+
 @dataclass
 class SelfRefineResult:
 
@@ -14,7 +15,8 @@ class SelfRefineResult:
     final_feedback: Any
 
     success: bool
-    llm_calls: int = 2
+    llm_calls: int
+
 
 
 async def self_refine(
@@ -29,15 +31,31 @@ async def self_refine(
 
     task = task or goal
 
+
+    llm_calls = 0
+
+
+
     # -------------------------
     # 1. Evaluate draft
     # -------------------------
 
-    first_feedback = await environment.evaluate(
-        candidate=draft,
-        task=task,
-        tool_name=tool_name,
-    )
+    try:
+
+        first_feedback = await environment.evaluate(
+            candidate=draft,
+            task=task,
+            tool_name=tool_name,
+        )
+
+    except Exception as e:
+
+        first_feedback = {
+            "success": False,
+            "error": str(e),
+        }
+
+
 
     # -------------------------
     # 2. Critique + revision
@@ -57,13 +75,19 @@ Improve the draft.
 
 Do not invent facts.
 Use only available evidence.
+
 Return only the improved answer.
 """
 
-    response = llm.ainvoke(prompt)
 
-    if hasattr(response, "__await__"):
-        response = await response
+    response = await llm.ainvoke(
+        prompt
+    )
+
+
+    llm_calls += 1
+
+
 
     revised = getattr(
         response,
@@ -71,22 +95,72 @@ Return only the improved answer.
         str(response),
     )
 
+
+
     # -------------------------
     # 3. Evaluate revision
     # -------------------------
 
-    final_feedback = await environment.evaluate(
-        candidate=revised,
-        task=task,
-        tool_name=tool_name,
-    )
+    try:
+
+        final_feedback = await environment.evaluate(
+            candidate=revised,
+            task=task,
+            tool_name=tool_name,
+        )
+
+    except Exception as e:
+
+        final_feedback = {
+            "success": False,
+            "error": str(e),
+        }
+
+
+
+    # Handle both:
+    # - EvaluationResult objects
+    # - Dictionary error responses
+
+    if isinstance(
+        final_feedback,
+        dict
+    ):
+
+        success = final_feedback.get(
+            "success",
+            False
+        )
+
+    else:
+
+        success = getattr(
+            final_feedback,
+            "success",
+            False
+        )
+
+
 
     return SelfRefineResult(
+
         goal=goal,
+
         draft=draft,
-        critique="Improved using environment feedback.",
+
+        critique=(
+            "Revision generated using "
+            "environment feedback."
+        ),
+
         revised=revised,
+
         initial_feedback=first_feedback,
+
         final_feedback=final_feedback,
-        success=final_feedback.success,
+
+        success=success,
+
+        llm_calls=llm_calls,
+
     )
