@@ -31,13 +31,9 @@ from langchain_core.callbacks import BaseCallbackHandler
 
 
 
-from agent.schema import build_agent_step_model
 from planning.environment import TravelEnvironment
 from planning.planner_selector import PlannerSelector
 
-from planning.plan_and_solve import PlanAndSolvePlanner
-from planning.tree_of_thoughts import TreeOfThoughtsPlanner
-from planning.lats import LATSPlanner
 
 from planning.tool_registry import MCPToolRegistry
 
@@ -50,7 +46,6 @@ from planning.decomposition import (
     execute_plan,
     final_output,
 )
-from groq import Groq
 from planning.dynamic_decomposition import dynamic_decomposition
 
 
@@ -202,76 +197,23 @@ def build_llm():
     )
     
 
+def create_execution_plan(
+    planner_result: PlannerResult,
+) -> list[dict]:
+    """
+    Convert planner output into an execution plan.
+    """
 
-
-
-async def execute_planned_task(
-    task,
-    outputs,
-    goal,
-    llm,
-    client,
-) -> PlannerResult:
-    tools = await discover_tools(client)
-    tool_registry = MCPToolRegistry(tools)
-
-    environment = TravelEnvironment(
-        mcp_client=client
-    )
-
-    selector = PlannerSelector(
-        llm=llm,
-        tool_registry=tool_registry,
-        environment=environment,
-    )
-
-    planner_type = await selector.select_planner(
-        task.instruction
-    )
-
-    if planner_type == PlannerType.PLAN_AND_SOLVE:
-
-        planner = PlanAndSolvePlanner(
-            llm,
-            tool_registry,
-        )
-
-    elif planner_type == PlannerType.TREE_OF_THOUGHTS:
-
-        planner = TreeOfThoughtsPlanner(
-            llm,
-            tool_registry,
-        )
-
-    elif planner_type == PlannerType.LATS:
-
-        planner = LATSPlanner(
-            llm,
-            tool_registry,
-            environment,
-        )
-
-    else:
-
-        raise ValueError(
-            f"Unsupported planner {planner_type}"
-        )
-
-    context = "\n\n".join(
-    f"OUTPUT FROM {dependency}:\n{outputs[dependency]}"
-    for dependency in task.depends_on
-) or "No prerequisite outputs."
-
-    full_task_prompt = (
-        f"Overall Goal: {goal}\n"
-        f"Task: {task.instruction}\n"
-        f"Context:\n{context}"
-    )
-
-    return await planner.run(
-        task.id,
-        full_task_prompt,
-    )
+    return [
+        {
+            "task": planner_result.task_id,
+            "tool": planner_result.metadata.get(
+                "selected_node",
+                planner_result.planner.value,
+            ),
+            "input": planner_result.output,
+        }
+    ]
 
 
 def save_artifact(
@@ -348,6 +290,14 @@ async def run_planning_agent(
     tools = await discover_tools(
         client
     )
+    tool_registry = MCPToolRegistry(
+        tools
+    )
+
+    environment = TravelEnvironment(
+        mcp_client=client
+    )
+
 
 
 
@@ -373,6 +323,11 @@ async def run_planning_agent(
 
         }
 
+    )
+    planner_selector = PlannerSelector(
+        llm,
+        tool_registry,
+        environment,
     )
 
 
@@ -412,37 +367,35 @@ async def run_planning_agent(
 
 
         plan: Plan = decompose_goal(
-
-            goal,
-
-            llm,
-
-            tool_names=list(
-                tools.keys()
-            )
-
-        )
+        
+                    goal,
+        
+                    llm,
+        
+                    tool_names=list(
+                        tools.keys()
+                    )
+        
+                )
 
 
         async def planner_executor(
             task,
             outputs,
-            goal
+            goal,
         ):
 
-            return await execute_planned_task(
-
+            result = await planner_selector.execute_planned_task(
                 task,
-
                 outputs,
-
                 goal,
-
-                llm,
-
-                client,
-
             )
+
+            result.execution_plan = create_execution_plan(
+                result
+            )
+
+            return result
 
 
 
@@ -671,40 +624,45 @@ if __name__ == "__main__":
 
 
 '''
-User Goal
-    |
 Planning Agent
-    |
+      │
+      ▼
+Discover MCP Tools
+      │
+      ▼
+Create Tool Registry
+      │
+      ▼
+Create Environment
+      │
+      ▼
+Create PlannerSelector (مرة واحدة)
+      │
+      ▼
 Decomposition
-    |
-Subtask
-    |
-Planner Selector
-    |
- -----------------------
- |          |           |
-P&S        ToT         LATS
- |          |           |
-Async Planner.run()
- |
-await MCP Tool
- |
-MCP Server
- |
-Database
-'''
-
- 
-'''
-run_planning_agent()
-        |
-await execute_plan()
-        |
-await planner_executor()
-        |
-await execute_planned_task()
-        |
-await planner.run()
-        |
-await MCP tool execution
+      │
+      ▼
+execute_plan()
+      │
+      ▼
+planner_executor()
+      │
+      ▼
+PlannerSelector.execute_planned_task()
+      │
+ ┌────┴──────────────┐
+ │       │           │
+ ▼       ▼           ▼
+P&S     ToT        LATS
+ │       │           │
+ └───────┴───────────┘
+         │
+         ▼
+ MCP Tool Registry
+         │
+         ▼
+    MCP Server
+         │
+         ▼
+     Database
 '''
