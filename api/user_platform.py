@@ -25,7 +25,8 @@ Selected Capability / Tool Execution
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-
+from datetime import datetime
+import uuid
 
 from api.models import (
     ChatRequest,
@@ -376,85 +377,24 @@ async def chat(request: ChatRequest):
         # LLM + MCP Runtime Discovery
 
 
-        result = await router.route(
-            {
-                "message": request.message,
-                "session_id": request.session_id,
-                "customer_id": request.customer_id,
-            }
-        )
-
-
-        return ChatResponse(
-
-
-            agent_id=
-
-                result.get(
-
-                    "tool",
-
-                    "unknown",
-
-                ),
-
-
-
-            session_id=
-
-                request.session_id,
-
-
-
-            response=
-
-                str(
-
-                    result.get(
-
-                        "result",
-
-                        "",
-
-                    )
-
-                ),
-
-
-
-            execution={
-
-
-                "status":
-
-                    result.get(
-
-                        "status",
-
-                        "completed",
-
-                    ),
-
-
-
-                "tool":
-
-                    result.get(
-
-                        "tool",
-
-                        "unknown",
-
-                    ),
-
-            },
-
-
-        )
-
-
-
-
+                result = await router.route(
+                    {
+                        "message": request.message,
+                        "session_id": request.session_id,
+                        "customer_id": request.customer_id,
+                    }
+                )
+        
+                return ChatResponse(
+                    agent_id=result.get("tool", "unknown"),
+                    session_id=request.session_id,
+                    message_id=str(uuid.uuid4()),
+                    role="assistant",
+                    content=str(result.get("result", "")),
+                    status=result.get("status", "completed"),
+                    steps=[],
+                    created_at=datetime.utcnow().isoformat(),
+                )
 
 
     except ValueError as exc:
