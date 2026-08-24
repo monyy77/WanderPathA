@@ -5,6 +5,8 @@ from shared.validation import (
     customer_exists,
     escalation_exists,
 )
+
+from shared.database import get_connection
 from shared.authorization import support_or_higher
 
 

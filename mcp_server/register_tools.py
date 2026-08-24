@@ -1,6 +1,11 @@
-from mcp_server.server import mcp
+"""
+Runtime MCP tool registration.
 
-from tools.flight_tools import (
+This module imports the existing WanderPathA tools and
+registers them with the FastMCP server.
+"""
+
+from tools.booking_tools import (
     get_nearby_airports,
     get_flight_options,
     get_bookings_by_flight,
@@ -12,7 +17,7 @@ from tools.customer_tools import (
     UpdateCustomerProfile,
 )
 
-from tools.finance_tools import (
+from tools.finance_and_decision_tools import (
     CalculateTripCost,
     CheckRefundEligibility,
     CalculateRefundAmount,
@@ -22,7 +27,7 @@ from tools.finance_tools import (
     CompareRebookingCost,
 )
 
-from tools.status_tools import (
+from tools.travel_status_tools import (
     get_flight_status,
     get_delay_duration,
     check_disruption_reason,
@@ -35,18 +40,31 @@ from tools.status_tools import (
     get_disruption_severity,
 )
 
+from tools.escalation_tools import (
+    escalate_to_human,
+    create_support_ticket,
+    schedule_agent_callback,
+    notify_supervisor,
+    log_escalation,
+)
 
+
+# =========================================================
+# AVAILABLE WANDERPATH TOOLS
+# =========================================================
 
 TOOLS = [
-
+    # Booking
     get_nearby_airports,
     get_flight_options,
     get_bookings_by_flight,
 
+    # Customer
     get_customer_profile,
     get_booking_history,
     UpdateCustomerProfile,
 
+    # Finance / Decision
     CalculateTripCost,
     CheckRefundEligibility,
     CalculateRefundAmount,
@@ -55,6 +73,7 @@ TOOLS = [
     IssueTravelVoucher,
     CompareRebookingCost,
 
+    # Travel Status
     get_flight_status,
     get_delay_duration,
     check_disruption_reason,
@@ -65,17 +84,31 @@ TOOLS = [
     get_estimated_arrival,
     check_alternative_transport,
     get_disruption_severity,
+
+    # Escalation
+    escalate_to_human,
+    create_support_ticket,
+    schedule_agent_callback,
+    notify_supervisor,
+    log_escalation,
 ]
 
 
-def register_runtime_tools():
+# =========================================================
+# REGISTER TOOLS
+# =========================================================
 
-    for t in TOOLS:
+def register_runtime_tools(mcp) -> None:
+    """
+    Register all existing WanderPathA tools with FastMCP.
 
-        @mcp.tool(
-            name=t.name,
-            description=t.description
+    The original LangChain tool function is registered directly
+    so FastMCP can preserve the function's input schema.
+    """
+
+    for tool in TOOLS:
+        mcp.add_tool(
+            tool.func,
+            name=tool.name,
+            description=tool.description,
         )
-        def wrapper(**kwargs):
-
-            return t.invoke(kwargs)

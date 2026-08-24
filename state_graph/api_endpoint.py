@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from state_graph.refundGraph.hitl import apply_human_decision
-from state_graph.refundGraph.refund_graph import resume_run
+from state_graph.refundGraph.refund_graph import resume_run , resolve_failure_ticket
 from state_graph.checkpointer import load_checkpoint, load_history
 from shared.database import get_connection
 

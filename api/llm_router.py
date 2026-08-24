@@ -253,49 +253,91 @@ Return JSON only.
     # ======================================================
 
     def _keyword_router(
-
         self,
-
-        message,
-
-        available_tools,
-
-    ):
+        message: str,
+        available_tools: list[str],
+    ) -> Optional[str]:
 
         message = message.lower()
 
-        mapping = {
+        mapping = [
+            (
+                [
+                    "refund",
+                    "refund money",
+                    "money back",
+                    "reimbursement",
+                    "eligible for refund",
+                ],
+                "check_refund_eligibility",
+            ),
+            (
+                [
+                    "compensation",
+                    "compensate",
+                ],
+                "calculate_compensation",
+            ),
+            (
+                [
+                    "flight status",
+                    "flight delayed",
+                    "delay",
+                    "delayed",
+                    "cancelled",
+                    "canceled",
+                ],
+                "get_flight_status",
+            ),
+            (
+                ["weather"],
+                "get_weather",
+            ),
+            (
+                [
+                    "airport",
+                    "nearby airport",
+                ],
+                "get_nearby_airports",
+            ),
+            (
+                [
+                    "profile",
+                    "customer profile",
+                    "my information",
+                ],
+                "get_customer_profile",
+            ),
+            (
+                [
+                    "booking history",
+                    "past bookings",
+                    "my bookings",
+                ],
+                "get_booking_history",
+            ),
+            (
+                [
+                    "delay duration",
+                    "how long is the delay",
+                ],
+                "get_delay_duration",
+            ),
+            (
+                [
+                    "connection risk",
+                    "miss my connection",
+                ],
+                "check_connection_risk",
+            ),
+        ]
 
-            "cancel": "cancel_booking",
-
-            "refund": "process_refund",
-
-            "rebook": "rebook_flight",
-
-            "delay": "get_flight_status",
-
-            "weather": "get_weather",
-
-            "airport": "get_nearby_airports",
-
-            "profile": "get_customer_profile",
-
-        }
-
-        for keyword, tool in mapping.items():
-
-            if (
-
-                keyword in message
-
-                and tool in available_tools
-
-            ):
-
-                return tool
+        for keywords, tool_name in mapping:
+            if tool_name in available_tools:
+                if any(keyword in message for keyword in keywords):
+                    return tool_name
 
         return None
-
     # ======================================================
     # Constrained ReAct Validation
     # ======================================================

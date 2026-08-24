@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.models import ChatRequest, ChatResponse
 from api.mcp_client import MCPClient
 from api.mcp_registry import MCPRegistry
-from api.agent_router import LLMRouter
+from api.llm_router import LLMRouter
 from api.llm_factory import get_llm
 
 logger = logging.getLogger(__name__)
@@ -91,6 +91,10 @@ async def startup():
 
     await mcp_registry.refresh()
 
+    logger.info(
+        "MCP connected. Discovered %d tools.",
+        len(await mcp_registry.list_tool_names()),
+    )
 @app.on_event("shutdown")
 async def shutdown():
 
