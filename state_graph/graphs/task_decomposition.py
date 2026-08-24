@@ -35,7 +35,7 @@ from typing import Any
 from planning.dag import Plan
 from planning.decomposition import decompose_goal
 from planning.planning_agent import build_llm
-from server.tool_registry import list_active_tools
+from mcp_server.tool_registry import list_active_tools
 
 
 def decompose_rebooking_task(state: dict[str, Any]) -> Plan:

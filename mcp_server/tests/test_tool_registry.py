@@ -24,7 +24,7 @@ import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-from server.tool_registry import (
+from mcp_server.tool_registry import (
     register_tool,
     deregister_tool,
     get_tool,

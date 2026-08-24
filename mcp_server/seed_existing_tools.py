@@ -27,7 +27,7 @@ import os
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from server.tool_registry import register_tool
+from mcp_server.tool_registry import register_tool
 
 # One entry per tool currently wired into server.py via guarded(...) or
 # guarded_async_decorator(...). agent_name/description/parameters_schema

@@ -1,58 +1,29 @@
 """
+api/user_platform.py
+
 WanderPathA User Platform API
-
-This module exposes the HTTP API used by the User Platform frontend.
-
-Flow:
-
-Frontend (Bolt)
-        |
-POST /api/chat
-        |
-AgentRouter
-        |
-LLM Router
-        |
-MCP Registry
-        |
-MCP Client
-        |
-WanderPath MCP Server
-        |
-Selected Capability / Tool Execution
 """
 
+from __future__ import annotations
+
+import logging
+import uuid
+from datetime import datetime
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from datetime import datetime
-import uuid
 
-from api.models import (
-    ChatRequest,
-    ChatResponse,
-)
-
-
-from api.agent_router import AgentRouter
-
-
+from api.models import ChatRequest, ChatResponse
 from api.mcp_client import MCPClient
-
-
 from api.mcp_registry import MCPRegistry
-
-
+from api.llm_router import LLMRouter
 from api.llm_factory import get_llm
 
+logger = logging.getLogger(__name__)
 
-
-
-
-# =======================================================
-# FastAPI Application
-# =======================================================
-
+# ==========================================================
+# FastAPI
+# ==========================================================
 
 app = FastAPI(
 
@@ -60,20 +31,13 @@ app = FastAPI(
 
     version="1.0.0",
 
-    description=
-    "Unified API for WanderPathA AI Agents",
+    description="Unified API for WanderPathA",
 
 )
 
-
-
-
-
-
-# =======================================================
+# ==========================================================
 # CORS
-# =======================================================
-
+# ==========================================================
 
 app.add_middleware(
 
@@ -89,264 +53,145 @@ app.add_middleware(
 
 )
 
-
-
-
-
-
-# =======================================================
-# MCP + LLM Initialization
-# =======================================================
-
-
-"""
-Runtime dependencies:
-
-
-LLM
-
- |
- +--> Gemini / Groq
-
-
-
-MCP Client
-
- |
- +--> FastMCP Client
-
- |
- +--> WanderPath MCP Server
-
-
-
-MCP Registry
-
- |
- +--> Runtime discovered MCP tools
-
-"""
-
-
-
-# MCP Server connection
+# ==========================================================
+# Runtime Objects
+# ==========================================================
 
 mcp_client = MCPClient(
-
-    server_url="http://localhost:8080"
-
+    "http://127.0.0.1:9000"
 )
-
-
-
-# Runtime MCP capabilities registry
 
 mcp_registry = MCPRegistry(
-
     mcp_client
-
 )
-
-
-
-# LLM Provider
 
 llm = get_llm()
 
-
-
-
-
-
-# =======================================================
-# Agent Router
-# =======================================================
-
-
-router = AgentRouter(
-
-    llm=llm,
-
-    mcp_registry=mcp_registry,
-
+router = LLMRouter(
+    llm,
+    mcp_registry,
 )
 
+# ==========================================================
+# In-memory Sessions
+# ==========================================================
 
+sessions = {}
 
+# ==========================================================
+# Startup / Shutdown
+# ==========================================================
 
+@app.on_event("startup")
+async def startup():
 
+    logger.info("Connecting to MCP Server...")
 
+    await mcp_client.connect()
 
+    await mcp_registry.refresh()
 
-# =======================================================
-# Health Check
-# =======================================================
+    logger.info(
+        "MCP connected. Discovered %d tools.",
+        len(await mcp_registry.list_tool_names()),
+    )
+@app.on_event("shutdown")
+async def shutdown():
 
+    logger.info("Disconnecting MCP...")
+
+    await mcp_client.disconnect()
+
+# ==========================================================
+# Root
+# ==========================================================
 
 @app.get("/")
 async def root():
 
-
     return {
 
+        "service": "WanderPathA",
 
-        "service":
-
-            "WanderPathA User Platform API",
-
-
-        "status":
-
-            "running",
+        "status": "running",
 
     }
 
-
-
-
-
+# ==========================================================
+# Health
+# ==========================================================
 
 @app.get("/health")
 async def health():
 
+    try:
+
+        tools = await mcp_registry.list_tool_names()
+
+        return {
+
+            "status": "healthy",
+
+            "mcp": True,
+
+            "tools": len(tools),
+
+        }
+
+    except Exception:
+
+        return {
+
+            "status": "degraded",
+
+            "mcp": False,
+
+        }
+
+# ==========================================================
+# Runtime Tools
+# ==========================================================
+
+@app.get("/api/tools")
+async def list_tools():
+
+    return await mcp_registry.list_capabilities()
+
+@app.post("/api/reload")
+async def reload_registry():
+
+    await mcp_registry.refresh()
 
     return {
 
-
-        "status":
-
-            "healthy",
+        "status": "reloaded"
 
     }
 
-
-
-
-
-
-
-
-# =======================================================
-# Available Agents
-# =======================================================
-
+# ==========================================================
+# Agents
+# ==========================================================
 
 @app.get("/api/agents")
-async def list_agents():
-
+async def agents():
 
     return [
 
-
         {
 
-            "id":
+            "id": "dynamic",
 
-                "memory",
+            "name": "Dynamic MCP Router",
 
+            "description": "Runtime capability routing"
 
-            "name":
-
-                "Memory Agent",
-
-
-            "description":
-
-                "Conversation memory and customer context",
-
-        },
-
-
-        {
-
-            "id":
-
-                "planning",
-
-
-            "name":
-
-                "Planning Agent",
-
-
-            "description":
-
-                "Task decomposition and planning",
-
-        },
-
-
-        {
-
-            "id":
-
-                "flight",
-
-
-            "name":
-
-                "Flight Agent",
-
-
-            "description":
-
-                "Flight rebooking workflows",
-
-        },
-
-
-        {
-
-            "id":
-
-                "refund",
-
-
-            "name":
-
-                "Refund Agent",
-
-
-            "description":
-
-                "Refund workflows",
-
-        },
-
-
-        {
-
-            "id":
-
-                "vip",
-
-
-            "name":
-
-                "VIP Agent",
-
-
-            "description":
-
-                "VIP trip customization",
-
-        },
+        }
 
     ]
 
-
-
-
-
-
-
-
-
-
-# =======================================================
-# Chat Endpoint
-# =======================================================
-
+# ==========================================================
+# Chat
+# ==========================================================
 
 @app.post(
 
@@ -356,96 +201,129 @@ async def list_agents():
 
 )
 
-async def chat(request: ChatRequest):
+async def chat(
 
+    request: ChatRequest,
+
+):
 
     try:
 
+        session_id = request.session_id
 
-        # User sends only message.
-        #
-        # Router decides:
-        #
-        # Planning
-        # Memory
-        # Flight
-        # Refund
-        # VIP
-        #
-        # using:
-        #
-        # LLM + MCP Runtime Discovery
+        if not session_id:
 
+            session_id = str(
 
-                result = await router.route(
-                    {
-                        "message": request.message,
-                        "session_id": request.session_id,
-                        "customer_id": request.customer_id,
-                    }
-                )
-        
-                return ChatResponse(
-                    agent_id=result.get("tool", "unknown"),
-                    session_id=request.session_id,
-                    message_id=str(uuid.uuid4()),
-                    role="assistant",
-                    content=str(result.get("result", "")),
-                    status=result.get("status", "completed"),
-                    steps=[],
-                    created_at=datetime.utcnow().isoformat(),
-                )
+                uuid.uuid4()
 
+            )
 
-    except ValueError as exc:
+        if session_id not in sessions:
 
+            sessions[session_id] = []
 
-        raise HTTPException(
+        sessions[session_id].append(
 
-            status_code=400,
+            {
 
-            detail=str(exc),
+                "role": "user",
+
+                "content": request.message,
+
+            }
 
         )
 
+        decision = await router.classify(
 
+            request.message
 
+        )
 
+        if decision.capability is None:
 
+            raise HTTPException(
+
+                status_code=400,
+
+                detail="No suitable MCP capability."
+
+            )
+
+        result = await mcp_client.call_tool(
+
+            decision.capability,
+
+            {
+
+                "message": request.message,
+
+                "customer_id": request.customer_id,
+
+            }
+
+        )
+
+        sessions[session_id].append(
+
+            {
+
+                "role": "assistant",
+
+                "content": str(result),
+
+            }
+
+        )
+
+        return ChatResponse(
+
+            agent_id=decision.capability,
+
+            session_id=session_id,
+
+            message_id=str(uuid.uuid4()),
+
+            role="assistant",
+
+            content=str(result),
+
+            status="completed",
+
+            steps=[],
+
+            created_at=datetime.utcnow().isoformat(),
+
+        )
+
+    except HTTPException:
+
+        raise
 
     except Exception as exc:
 
+        logger.exception(
+
+            "Chat failed"
+
+        )
 
         raise HTTPException(
 
             status_code=500,
 
-            detail=
-
-                f"Internal server error: {str(exc)}",
+            detail=str(exc),
 
         )
 
-
-
-
-
-
-
-
-
-
-# =======================================================
+# ==========================================================
 # Local Development
-# =======================================================
-
+# ==========================================================
 
 if __name__ == "__main__":
 
-
     import uvicorn
-
-
 
     uvicorn.run(
 
