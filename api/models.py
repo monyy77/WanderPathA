@@ -1,15 +1,8 @@
 from pydantic import BaseModel
-from typing import Optional, Any
+from typing import Optional, Any, List
 
 
 class ChatRequest(BaseModel):
-    """
-    User request model.
-
-    The user no longer selects the agent.
-    AgentRouter will classify the message
-    and choose the correct agent automatically.
-    """
 
     message: str
 
@@ -17,21 +10,24 @@ class ChatRequest(BaseModel):
 
     customer_id: Optional[str] = None
 
-    # Optional for backward compatibility
-    # Not required from frontend anymore.
     agent_id: Optional[str] = None
 
 
 
 class ChatResponse(BaseModel):
-    """
-    Unified response returned to frontend.
-    """
 
     agent_id: str
 
     session_id: Optional[str] = None
 
-    response: str
+    message_id: str
 
-    execution: dict[str, Any]
+    role: str = "assistant"
+
+    content: str
+
+    status: str
+
+    steps: List[dict] = []
+
+    created_at: str
