@@ -386,6 +386,132 @@ Compensation: Voucher issued
 - **Self-Refine and Reflexion** — both matched Plan-and-Solve's 80% success rate; Self-Refine got there in a single pass at a fraction of the latency, while Reflexion needed the fewest average LLM calls thanks to early stopping on success.
 - **RAG methods** — Naive RAG is the fastest baseline but struggles with exact identifiers (booking codes, flight numbers); Hybrid RAG improves on those cases by adding keyword/BM25 search; Agentic RAG trades extra latency for the ability to decide when retrieval is unnecessary or insufficient. See `retrieval_eval/results.csv` for the measured numbers.
 
+## Project Evolution
+
+WanderPathA was developed incrementally through multiple architectural stages:
+
+### Stage 1 — MCP-Based Travel Agent
+- Built an MCP server exposing deterministic travel tools.
+- Connected tools with a real MySQL database.
+- Added validation and authorization layers.
+
+### Stage 2 — Memory and RAG Extension
+- Added short-term, episodic, and semantic memory.
+- Implemented promote-or-drop routing.
+- Added retrieval over company policies using RAG.
+
+### Stage 3 — Planning and Autonomous Decision Making
+- Added decomposition-first and dynamic planning.
+- Integrated Plan-and-Solve, Tree of Thoughts, and LATS.
+- Introduced grounded execution over generated plans.
+
+### Final Stage — Autonomous Agent Platform
+The final system combines:
+- Planning
+- Memory
+- Retrieval
+- MCP Tool Execution
+- Evaluation Frameworks
+
+into one autonomous travel assistant architecture.
+
+
+## Security & Reliability
+
+The system was designed with controlled execution and safety boundaries:
+
+### Database Safety
+- The LLM never accesses the database directly.
+- All database operations are performed through MCP tools.
+- SQL generation by the model is completely avoided.
+
+### Tool Validation
+Every tool call passes through:
+- Input schema validation.
+- Entity existence checks.
+- Business rule validation.
+
+### Authorization Layer
+Sensitive operations require permission checks:
+
+Examples:
+- Refund processing.
+- Escalation creation.
+- VIP-only actions.
+
+### Grounded Responses
+The agent only uses:
+- Retrieved policy documents.
+- MCP tool outputs.
+- Verified memory entries.
+
+to reduce hallucination.
+
+
+## Agent Decision Flow
+
+For every user request:
+
+
+|
+v
+Intent Understanding
+|
+v
+Memory Retrieval
+|
+v
+Need External Knowledge?
+|
++--+--+
+| |
+Yes No
+| |
+RAG Continue
+|
+v
+Planning Required?
+|
++---+
+| |
+No Yes
+| |
+Tool Planner Selection
+|
+v
+Execution Through MCP
+|
+v
+Observation
+|
+v
+Memory Update
+|
+v
+Final Response
+
+
+The agent dynamically decides whether it needs:
+- Memory retrieval.
+- RAG retrieval.
+- Planning.
+- Direct tool execution.
+
+## Technology Stack
+
+| Category | Technology |
+|---|---|
+| Language | Python 3.11 |
+| Agent Framework | LangChain |
+| LLM | Google Gemini 2.5 Flash / Groq LLM |
+| Protocol | Model Context Protocol (MCP) |
+| Database | MySQL |
+| Vector Search | Vector Database |
+| Validation | Pydantic |
+| Testing | Pytest |
+| Version Control | Git + GitHub |
+
+
 ## Team Members
 
 - Menna Sobhe
