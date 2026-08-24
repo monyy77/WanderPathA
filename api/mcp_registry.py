@@ -3,6 +3,22 @@ MCP Runtime Registry
 
 Discovers tools dynamically
 from WanderPath MCP Server.
+
+Flow:
+
+AgentRouter
+      |
+      v
+MCPRegistry
+      |
+      v
+MCPClient.list_tools()
+      |
+      v
+FastMCP Client
+      |
+      v
+WanderPath MCP Server tools/list
 """
 
 
@@ -10,11 +26,16 @@ from api.mcp_client import MCPClient
 
 
 
+
+
 class MCPRegistry:
 
 
 
-    def __init__(self, mcp_client=None):
+    def __init__(
+        self,
+        mcp_client=None
+    ):
 
 
         self.mcp_client = (
@@ -27,12 +48,37 @@ class MCPRegistry:
 
 
 
+        # Cache discovered tools
+
+        self._capabilities = None
 
 
-    def list_capabilities(self):
 
 
-        tools = self.mcp_client.list_tools()
+
+
+    # =================================================
+    # Runtime Tool Discovery
+    # =================================================
+
+
+    async def list_capabilities(self):
+
+
+        """
+        Discover MCP tools dynamically.
+
+        Calls:
+
+        MCP Client
+             |
+             v
+        tools/list
+
+        """
+
+
+        tools = await self.mcp_client.list_tools()
 
 
 
@@ -47,16 +93,36 @@ class MCPRegistry:
 
                 {
 
+
                     "name":
-                        tool.name,
+
+                        tool.get(
+
+                            "name",
+
+                            ""
+
+                        ),
+
 
 
                     "description":
-                        tool.description,
+
+                        tool.get(
+
+                            "description",
+
+                            ""
+
+                        ),
 
                 }
 
             )
+
+
+
+        self._capabilities = capabilities
 
 
 
@@ -66,14 +132,17 @@ class MCPRegistry:
 
 
 
-    def get_capabilities_prompt(self):
 
 
-        capabilities = (
+    # =================================================
+    # LLM Prompt Builder
+    # =================================================
 
-            self.list_capabilities()
 
-        )
+    async def get_capabilities_prompt(self):
+
+
+        capabilities = await self.list_capabilities()
 
 
 
@@ -81,7 +150,10 @@ class MCPRegistry:
 
             [
 
-                f"{item['name']}: {item['description']}"
+                (
+                    f"{item['name']}: "
+                    f"{item['description']}"
+                )
 
                 for item in capabilities
 
