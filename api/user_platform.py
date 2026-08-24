@@ -392,7 +392,7 @@ async def chat(request: ChatRequest):
 
                 result.get(
 
-                    "agent",
+                    "tool",
 
                     "unknown",
 
@@ -408,11 +408,15 @@ async def chat(request: ChatRequest):
 
             response=
 
-                result.get(
+                str(
 
-                    "result",
+                    result.get(
 
-                    "",
+                        "result",
+
+                        "",
+
+                    )
 
                 ),
 
@@ -433,11 +437,11 @@ async def chat(request: ChatRequest):
 
 
 
-                "agent":
+                "tool":
 
                     result.get(
 
-                        "agent",
+                        "tool",
 
                         "unknown",
 
