@@ -376,33 +376,13 @@ async def chat(request: ChatRequest):
         # LLM + MCP Runtime Discovery
 
 
-        result = router.route(
-
+        result = await router.route(
             {
-
-
-                "message":
-
-                    request.message,
-
-
-                "session_id":
-
-                    request.session_id,
-
-
-                "customer_id":
-
-                    request.customer_id,
-
-
+                "message": request.message,
+                "session_id": request.session_id,
+                "customer_id": request.customer_id,
             }
-
         )
-
-
-
-
 
 
         return ChatResponse(
