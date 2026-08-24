@@ -7,7 +7,7 @@ import type {
 } from "./types";
 import { AGENTS } from "./agents";
 
-const API_BASE = "/api";
+const API_BASE = "http://localhost:8000/api";
 
 let useMockFallback = false;
 
@@ -124,8 +124,7 @@ export async function fetchAgents(): Promise<Agent[]> {
   try {
     const res = await fetch(`${API_BASE}/agents`);
     if (!res.ok) throw new Error(`agents failed (${res.status})`);
-    const data = (await res.json()) as { agents: Agent[] };
-    return data.agents;
+    return (await res.json()) as Agent[];
   } catch {
     return AGENTS;
   }
