@@ -30,6 +30,7 @@ from api.mcp_registry import MCPRegistry
 
 
 
+
 class LLMRouter:
 
 
@@ -42,17 +43,12 @@ class LLMRouter:
 
 
         # LLM instance
+
         self.llm = llm
 
 
 
         # Runtime MCP Registry
-        #
-        # If an external registry is passed
-        # use it.
-        #
-        # Otherwise create one that uses
-        # MCP Client internally.
 
         self.mcp_registry = (
 
@@ -66,27 +62,34 @@ class LLMRouter:
 
 
 
+
+
     # =================================================
     # Capability Classification
     # =================================================
 
 
-    def classify(self, message: str):
+    async def classify(
+        self,
+        message: str
+    ):
 
 
-        # Discover MCP tools dynamically
+        # -----------------------------------------
+        # Discover runtime MCP tools
+        # -----------------------------------------
 
         capabilities = (
 
-            self.mcp_registry
+            await self.mcp_registry
             .get_capabilities_prompt()
 
         )
 
 
 
-        # If LLM is not configured,
-        # fallback will handle routing
+        # If LLM unavailable
+        # AgentRouter fallback handles routing
 
         if self.llm is None:
 
@@ -100,8 +103,8 @@ class LLMRouter:
 
 You are a routing agent.
 
-Your task is to select exactly ONE
-capability from the available MCP tools.
+Select exactly ONE capability
+from the available MCP tools.
 
 Available MCP capabilities:
 
@@ -115,16 +118,16 @@ User request:
 
 Rules:
 
-- Select only from the provided capabilities.
-- Never invent a capability.
-- Return only valid JSON.
+- Choose only existing MCP capabilities.
+- Never invent tools.
+- Return only JSON.
 
 
-Required format:
+Format:
 
 {{
     "capability":
-    "exact_capability_name"
+    "exact_tool_name"
 }}
 
 """
@@ -140,11 +143,8 @@ Required format:
 
 
 
-
         try:
 
-
-            # Parse LLM JSON response
 
             data = json.loads(
 
@@ -163,9 +163,9 @@ Required format:
 
 
 
-
-            # Validate against
-            # runtime MCP capabilities
+            # -----------------------------------------
+            # Runtime validation
+            # -----------------------------------------
 
             available = [
 
@@ -173,12 +173,10 @@ Required format:
 
                 for item
 
-                in self.mcp_registry
+                in await self.mcp_registry
                 .list_capabilities()
 
             ]
-
-
 
 
 
@@ -199,8 +197,5 @@ Required format:
 
 
 
-
-        # Invalid response
-        # AgentRouter will use fallback
 
         return None
