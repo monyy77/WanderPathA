@@ -1,150 +1,128 @@
 """
-MCP Aware LLM Router
+api/agent_router.py
 
-LLM chooses only from
-runtime discovered MCP capabilities.
+Dynamic MCP Router
 
-Flow:
-
-User Message
-      |
-      v
-LLM Router
-      |
-      v
-MCP Registry
-      |
-      v
-Runtime MCP Tools
-      |
-      v
-Validated Capability
+Discovers tools from the MCP Server at runtime
+and constrains the LLM to only those tools.
 """
 
+from __future__ import annotations
 
 import json
-
+import logging
+from dataclasses import dataclass
+from typing import Optional
 
 from api.mcp_registry import MCPRegistry
 
+logger = logging.getLogger(__name__)
 
 
+# ==========================================================
+# Routing Decision
+# ==========================================================
 
+@dataclass
+class RoutingDecision:
+
+    capability: Optional[str]
+
+    confidence: float = 1.0
+
+    reason: str = ""
+
+
+# ==========================================================
+# Router
+# ==========================================================
 
 class LLMRouter:
 
-
-
     def __init__(
         self,
-        llm=None,
-        mcp_registry=None
+        llm,
+        mcp_registry: MCPRegistry,
     ):
-
-
-        # LLM instance
 
         self.llm = llm
 
+        self.registry = mcp_registry
 
-
-        # Runtime MCP Registry
-
-        self.mcp_registry = (
-
-            mcp_registry
-
-            or MCPRegistry()
-
-        )
-
-
-
-
-
-
-
-    # =================================================
-    # Capability Classification
-    # =================================================
-
+    # ======================================================
+    # Main Routing
+    # ======================================================
 
     async def classify(
         self,
-        message: str
-    ):
+        message: str,
+    ) -> RoutingDecision:
 
+        capabilities = await self.registry.list_capabilities()
 
-        # -----------------------------------------
-        # Discover runtime MCP tools
-        # -----------------------------------------
+        if not capabilities:
 
-        capabilities = (
+            return RoutingDecision(
+                capability=None,
+                confidence=0,
+                reason="No MCP capabilities discovered."
+            )
 
-            await self.mcp_registry
-            .get_capabilities_prompt()
+        available_tools = [
+
+            tool["name"]
+
+            for tool in capabilities
+
+        ]
+
+        prompt = self._build_prompt(
+
+            message,
+
+            capabilities,
 
         )
 
+        # --------------------------------------------------
 
+        # Fallback if LLM unavailable
 
-        # If LLM unavailable
-        # AgentRouter fallback handles routing
+        # --------------------------------------------------
 
         if self.llm is None:
 
-            return None
+            capability = self._keyword_router(
 
+                message,
 
+                available_tools,
 
+            )
 
+            return RoutingDecision(
 
-        prompt = f"""
+                capability=capability,
 
-You are a routing agent.
+                confidence=0.25,
 
-Select exactly ONE capability
-from the available MCP tools.
+                reason="Keyword fallback.",
 
-Available MCP capabilities:
+            )
 
-{capabilities}
+        # --------------------------------------------------
 
+        # LLM
 
-User request:
-
-{message}
-
-
-Rules:
-
-- Choose only existing MCP capabilities.
-- Never invent tools.
-- Return only JSON.
-
-
-Format:
-
-{{
-    "capability":
-    "exact_tool_name"
-}}
-
-"""
-
-
-
-        response = self.llm.invoke(
-
-            prompt
-
-        )
-
-
-
+        # --------------------------------------------------
 
         try:
 
+            response = self.llm.invoke(
+
+                prompt
+
+            )
 
             data = json.loads(
 
@@ -152,50 +130,186 @@ Format:
 
             )
 
-
-
             capability = data.get(
 
                 "capability"
 
             )
 
+            if capability not in available_tools:
 
+                logger.warning(
 
+                    "LLM selected invalid tool '%s'",
 
-            # -----------------------------------------
-            # Runtime validation
-            # -----------------------------------------
+                    capability,
 
-            available = [
+                )
 
-                item["name"]
+                capability = self._keyword_router(
 
-                for item
+                    message,
 
-                in await self.mcp_registry
-                .list_capabilities()
+                    available_tools,
 
-            ]
+                )
 
+                return RoutingDecision(
 
+                    capability=capability,
 
-            if capability in available:
+                    confidence=0.30,
 
+                    reason="LLM hallucinated. Keyword fallback."
 
-                return capability
+                )
 
+            return RoutingDecision(
 
+                capability=capability,
 
+                confidence=1.0,
 
+                reason="LLM routing",
+
+            )
 
         except Exception:
 
+            logger.exception(
 
-            pass
+                "Router failed"
 
+            )
 
+            capability = self._keyword_router(
 
+                message,
 
+                available_tools,
+
+            )
+
+            return RoutingDecision(
+
+                capability=capability,
+
+                confidence=0.20,
+
+                reason="Exception fallback",
+
+            )
+
+    # ======================================================
+    # Prompt
+    # ======================================================
+
+    def _build_prompt(
+
+        self,
+
+        message,
+
+        capabilities,
+
+    ):
+
+        capability_prompt = "\n".join(
+
+            [
+
+                f"- {item['name']}: {item['description']}"
+
+                for item in capabilities
+
+            ]
+
+        )
+
+        return f"""
+You are an MCP routing agent.
+
+You MUST choose exactly ONE tool.
+
+Never invent tools.
+
+Available MCP Tools
+
+{capability_prompt}
+
+User Request
+
+{message}
+
+Return JSON only.
+
+{{
+    "capability":"tool_name"
+}}
+"""
+
+    # ======================================================
+    # Simple Fallback Router
+    # ======================================================
+
+    def _keyword_router(
+
+        self,
+
+        message,
+
+        available_tools,
+
+    ):
+
+        message = message.lower()
+
+        mapping = {
+
+            "cancel": "cancel_booking",
+
+            "refund": "process_refund",
+
+            "rebook": "rebook_flight",
+
+            "delay": "get_flight_status",
+
+            "weather": "get_weather",
+
+            "airport": "get_nearby_airports",
+
+            "profile": "get_customer_profile",
+
+        }
+
+        for keyword, tool in mapping.items():
+
+            if (
+
+                keyword in message
+
+                and tool in available_tools
+
+            ):
+
+                return tool
 
         return None
+
+    # ======================================================
+    # Constrained ReAct Validation
+    # ======================================================
+
+    async def validate_capability(
+
+        self,
+
+        tool_name: str,
+
+    ) -> bool:
+
+        return await self.registry.has_capability(
+
+            tool_name
+
+        )

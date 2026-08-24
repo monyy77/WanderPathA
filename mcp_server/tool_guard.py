@@ -26,7 +26,7 @@ changes the moment the row changes, regardless of who wrote it.
 import functools
 from typing import Any, Callable
 
-from server.tool_registry import get_tool
+from mcp_server.tool_registry import get_tool
 
 
 class ToolNotActiveError(Exception):

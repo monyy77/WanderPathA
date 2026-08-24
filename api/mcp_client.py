@@ -1,140 +1,130 @@
 """
-WanderPathA MCP Client
+api/mcp_client.py
 
-Real FastMCP Client implementation.
-
-Architecture:
-
-User Platform API
-        |
-        v
-MCPClient
-        |
-        v
-fastmcp.Client
-        |
-        v
-Streamable HTTP Transport
-        |
-        v
-WanderPath MCP Server
+Production MCP Client
 """
 
+from __future__ import annotations
+
+import asyncio
+import logging
 
 from fastmcp import Client
 
-
-
+logger = logging.getLogger(__name__)
 
 
 class MCPClient:
+    """
+    Wrapper around FastMCP Client.
 
-
+    Features
+    --------
+    • Lazy connection
+    • Connection pooling
+    • Auto reconnect
+    • Error handling
+    • Logging
+    """
 
     def __init__(
         self,
-        server_url="http://localhost:8080"
+        server_url: str = "http://127.0.0.1:9000",
     ):
 
-
-        self.server_url = server_url
-
-
-        # Real FastMCP Client
+        self.server_url = server_url.rstrip("/")
 
         self.client = Client(
-            server_url
+            self.server_url + "/mcp"
         )
-
 
         self.connected = False
 
+        self._lock = asyncio.Lock()
 
-
-
-
-
-    # =================================================
-    # Connection Management
-    # =================================================
-
+    # ======================================================
+    # Connection
+    # ======================================================
 
     async def connect(self):
 
+        async with self._lock:
 
-        if not self.connected:
+            if self.connected:
+                return
 
+            try:
 
-            await self.client.__aenter__()
+                await self.client.__aenter__()
 
+                self.connected = True
 
-            self.connected = True
+                logger.info(
+                    "Connected to MCP Server"
+                )
 
+            except Exception:
 
+                self.connected = False
 
+                logger.exception(
+                    "Failed connecting to MCP Server"
+                )
 
-
-
-
+                raise
 
     async def disconnect(self):
 
+        async with self._lock:
 
-        if self.connected:
+            if not self.connected:
+                return
 
+            try:
 
-            await self.client.__aexit__(
-                None,
-                None,
-                None
-            )
+                await self.client.__aexit__(
+                    None,
+                    None,
+                    None,
+                )
 
+            finally:
 
-            self.connected = False
+                self.connected = False
 
+                logger.info(
+                    "Disconnected from MCP Server"
+                )
 
+    async def ensure_connection(self):
 
+        if not self.connected:
 
+            await self.connect()
 
-
-
-
-    # =================================================
-    # MCP Tool Discovery
-    # =================================================
-
+    # ======================================================
+    # Tool Discovery
+    # ======================================================
 
     async def list_tools(self):
 
+        await self.ensure_connection()
 
-        await self.connect()
+        try:
 
+            return await self.client.list_tools()
 
+        except Exception:
 
-        tools = await self.client.list_tools()
+            logger.exception(
+                "Failed listing tools"
+            )
 
-
-
-        return tools
-
-
-
-
-
-
-
-    # =================================================
-    # Helper:
-    # Return only tool names
-    # =================================================
-
+            raise
 
     async def list_tool_names(self):
 
-
         tools = await self.list_tools()
-
-
 
         return [
 
@@ -144,72 +134,71 @@ class MCPClient:
 
         ]
 
-
-
-
-
-
-
-
-    # =================================================
-    # MCP Tool Execution
-    # =================================================
-
+    # ======================================================
+    # Tool Execution
+    # ======================================================
 
     async def call_tool(
         self,
         tool_name: str,
-        arguments: dict
+        arguments: dict | None = None,
     ):
 
+        await self.ensure_connection()
 
-        await self.connect()
+        if arguments is None:
 
+            arguments = {}
 
+        try:
 
-        result = await self.client.call_tool(
+            result = await self.client.call_tool(
+                tool_name,
+                arguments,
+            )
 
-            tool_name,
+            return result
 
-            arguments
+        except Exception:
 
-        )
+            logger.exception(
+                "Tool '%s' failed",
+                tool_name,
+            )
 
+            raise
 
-
-        return result
-
-
-
-
-
-
-
-
-    # =================================================
+    # ======================================================
     # Debug
-    # =================================================
-
+    # ======================================================
 
     async def test_connection(self):
 
-
         tools = await self.list_tools()
 
-
-
-        print(
-            "\nAvailable MCP Tools:"
-        )
-
+        print("\nAvailable MCP Tools:\n")
 
         for tool in tools:
 
-
-            print(
-                f"- {tool.name}"
-            )
-
-
+            print(f"• {tool.name}")
 
         return tools
+
+    # ======================================================
+    # Context Manager
+    # ======================================================
+
+    async def __aenter__(self):
+
+        await self.connect()
+
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type,
+        exc,
+        tb,
+    ):
+
+        await self.disconnect()

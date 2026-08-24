@@ -20,7 +20,7 @@ Execute Tool
 Update Task State
 """
 
-from server.tool_guard import validate_tool
+from mcp_server.tool_guard import validate_tool
 
 
 async def execute_task(
