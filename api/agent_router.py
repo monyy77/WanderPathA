@@ -3,29 +3,35 @@ WanderPathA Agent Router
 
 Dynamic MCP Runtime Router
 
+Flow:
+
 User Message
       |
       v
 LLM Router
       |
       v
-MCP Runtime Tools Discovery
+MCP tools/list Discovery
       |
       v
 Capability Validation
+      |
+      v
+Tool Schema Validation
       |
       v
 Dynamic MCP Tool Calling
       |
       v
 WanderPath MCP Server
+      |
+      v
+Database / Response
 
 
-Execution:
-
-Planning -> Internal Agent
-Memory   -> Internal Agent
-Others   -> MCP Tools
+No static agents.
+No static tool mapping.
+MCP Server is the source of truth.
 """
 
 
@@ -38,6 +44,13 @@ from api.llm_router import LLMRouter
 from api.mcp_validator import (
     MCPCapabilityValidator
 )
+
+
+from api.tool_validator import (
+    MCPToolValidator
+)
+
+
 
 
 
@@ -53,6 +66,7 @@ try:
 except Exception:
 
     run_agent = None
+
 
 
 
@@ -78,8 +92,14 @@ class AgentRouter:
 
 
 
+
         # -----------------------------------------
-        # MCP Capability Validator
+        # Capability Validator
+        #
+        # Checks:
+        # - tool exists
+        # - discovered from MCP
+        #
         # -----------------------------------------
 
         self.capability_validator = (
@@ -90,8 +110,34 @@ class AgentRouter:
 
 
 
+
+
+        # -----------------------------------------
+        # Tool Schema Validator
+        #
+        # Checks:
+        # - arguments
+        # - required fields
+        # - schema compatibility
+        #
+        # -----------------------------------------
+
+        self.tool_validator = (
+            MCPToolValidator(
+                mcp_registry
+            )
+        )
+
+
+
+
+
+
         # -----------------------------------------
         # LLM Router
+        #
+        # Uses MCP tools/list
+        #
         # -----------------------------------------
 
         self.llm_router = LLMRouter(
@@ -109,6 +155,7 @@ class AgentRouter:
 
 
 
+
     # =================================================
     # Main Router
     # =================================================
@@ -118,7 +165,6 @@ class AgentRouter:
         self,
         request: dict
     ):
-
 
 
         capability = await self.classify(
@@ -139,6 +185,7 @@ class AgentRouter:
             request
 
         )
+
 
 
 
@@ -173,11 +220,12 @@ class AgentRouter:
 
 
 
+
+
         if capability:
 
 
-
-            is_valid = await (
+            valid = await (
 
                 self.capability_validator
 
@@ -191,7 +239,7 @@ class AgentRouter:
 
 
 
-            if is_valid:
+            if valid:
 
                 return capability
 
@@ -200,7 +248,8 @@ class AgentRouter:
 
 
 
-        # fallback
+
+        # fallback only if LLM fails
 
         return self.keyword_fallback(
 
@@ -240,7 +289,32 @@ class AgentRouter:
 
 
 
-        return await (
+
+
+        # -----------------------------------------
+        # Validate tool exists + arguments
+        # before execution
+        # -----------------------------------------
+
+        await self.tool_validator.validate(
+
+            capability,
+
+            request
+
+        )
+
+
+
+
+
+
+
+        # -----------------------------------------
+        # Execute real MCP Tool
+        # -----------------------------------------
+
+        result = await (
 
             self.mcp_registry
 
@@ -255,6 +329,27 @@ class AgentRouter:
             )
 
         )
+
+
+
+        return {
+
+
+            "tool":
+
+                capability,
+
+
+            "status":
+
+                "success",
+
+
+            "result":
+
+                result
+
+        }
 
 
 
@@ -275,7 +370,10 @@ class AgentRouter:
     ):
 
 
+
         text = message.lower()
+
+
 
 
 
@@ -286,8 +384,11 @@ class AgentRouter:
             for word in [
 
                 "refund",
+
                 "compensation",
+
                 "money back",
+
                 "reimbursement"
 
             ]
@@ -296,8 +397,11 @@ class AgentRouter:
 
 
             return (
+
                 "refund_with_confirmation"
+
             )
+
 
 
 
@@ -311,10 +415,15 @@ class AgentRouter:
             for word in [
 
                 "flight",
+
                 "cancelled",
+
                 "canceled",
+
                 "delayed",
+
                 "rebook",
+
                 "reschedule"
 
             ]
@@ -323,7 +432,9 @@ class AgentRouter:
 
 
             return (
+
                 "rebook_flight"
+
             )
 
 
@@ -339,8 +450,11 @@ class AgentRouter:
             for word in [
 
                 "vip",
+
                 "upgrade",
+
                 "premium",
+
                 "business"
 
             ]
@@ -349,8 +463,11 @@ class AgentRouter:
 
 
             return (
+
                 "upgrade_to_vip"
+
             )
+
 
 
 
@@ -364,8 +481,11 @@ class AgentRouter:
             for word in [
 
                 "remember",
+
                 "forget",
+
                 "preference",
+
                 "save"
 
             ]
@@ -374,7 +494,9 @@ class AgentRouter:
 
 
             return (
+
                 "memory_agent"
+
             )
 
 
@@ -382,8 +504,11 @@ class AgentRouter:
 
 
 
+
         return (
+
             "planning_agent"
+
         )
 
 
@@ -405,7 +530,6 @@ class AgentRouter:
     ):
 
 
-
         result = run_planning_agent(
 
             request["message"]
@@ -422,9 +546,11 @@ class AgentRouter:
                 "planning_agent",
 
 
+
             "status":
 
                 "success",
+
 
 
             "result":
@@ -480,9 +606,11 @@ class AgentRouter:
                 "memory_agent",
 
 
+
             "status":
 
                 "success",
+
 
 
             "result":
