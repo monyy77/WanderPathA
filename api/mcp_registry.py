@@ -1,31 +1,9 @@
 """
 MCP Runtime Registry
 
-Discovers tools dynamically
-from WanderPath MCP Server.
-
-Flow:
-
-AgentRouter
-      |
-      v
-MCPRegistry
-      |
-      v
-MCPClient.list_tools()
-      |
-      v
-FastMCP Client
-      |
-      v
-WanderPath MCP Server tools/list
+Discovers capabilities
+from MCP Server dynamically.
 """
-
-
-from api.mcp_client import MCPClient
-
-
-
 
 
 class MCPRegistry:
@@ -34,51 +12,29 @@ class MCPRegistry:
 
     def __init__(
         self,
-        mcp_client=None
+        mcp_client
+    ):
+
+        self.mcp_client = mcp_client
+
+
+
+
+
+
+    async def list_capabilities(
+        self
     ):
 
 
-        self.mcp_client = (
 
-            mcp_client
+        tools = await (
 
-            or MCPClient()
+            self.mcp_client
+
+            .list_tools()
 
         )
-
-
-
-        # Cache discovered tools
-
-        self._capabilities = None
-
-
-
-
-
-
-    # =================================================
-    # Runtime Tool Discovery
-    # =================================================
-
-
-    async def list_capabilities(self):
-
-
-        """
-        Discover MCP tools dynamically.
-
-        Calls:
-
-        MCP Client
-             |
-             v
-        tools/list
-
-        """
-
-
-        tools = await self.mcp_client.list_tools()
 
 
 
@@ -93,36 +49,24 @@ class MCPRegistry:
 
                 {
 
-
                     "name":
 
-                        tool.get(
-
-                            "name",
-
-                            ""
-
-                        ),
-
+                        tool.name,
 
 
                     "description":
 
-                        tool.get(
+                        tool.description,
 
-                            "description",
 
-                            ""
 
-                        ),
+                    "input_schema":
+
+                        tool.inputSchema,
 
                 }
 
             )
-
-
-
-        self._capabilities = capabilities
 
 
 
@@ -134,15 +78,17 @@ class MCPRegistry:
 
 
 
-    # =================================================
-    # LLM Prompt Builder
-    # =================================================
+    async def get_capabilities_prompt(
+        self
+    ):
 
 
-    async def get_capabilities_prompt(self):
 
+        capabilities = await (
 
-        capabilities = await self.list_capabilities()
+            self.list_capabilities()
+
+        )
 
 
 
@@ -150,10 +96,7 @@ class MCPRegistry:
 
             [
 
-                (
-                    f"{item['name']}: "
-                    f"{item['description']}"
-                )
+                f"{item['name']}: {item['description']}"
 
                 for item in capabilities
 
