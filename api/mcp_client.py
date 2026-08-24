@@ -1,14 +1,20 @@
 """
 WanderPathA MCP Client
 
-Real MCP client implementation.
+Real FastMCP Client implementation.
 
-Connects to:
+Architecture:
 
-User Platform
+User Platform API
         |
         v
-FastMCP Client
+MCPClient
+        |
+        v
+fastmcp.Client
+        |
+        v
+Streamable HTTP Transport
         |
         v
 WanderPath MCP Server
@@ -16,6 +22,8 @@ WanderPath MCP Server
 
 
 from fastmcp import Client
+
+
 
 
 
@@ -32,32 +40,82 @@ class MCPClient:
         self.server_url = server_url
 
 
+        # Real FastMCP Client
 
         self.client = Client(
             server_url
         )
 
 
+        self.connected = False
+
+
 
 
 
 
     # =================================================
-    # Discover MCP Tools
+    # Connection Management
+    # =================================================
+
+
+    async def connect(self):
+
+
+        if not self.connected:
+
+
+            await self.client.__aenter__()
+
+
+            self.connected = True
+
+
+
+
+
+
+
+
+    async def disconnect(self):
+
+
+        if self.connected:
+
+
+            await self.client.__aexit__(
+                None,
+                None,
+                None
+            )
+
+
+            self.connected = False
+
+
+
+
+
+
+
+
+    # =================================================
+    # MCP Tool Discovery
     # =================================================
 
 
     async def list_tools(self):
 
 
-        async with self.client as client:
-
-
-            tools = await client.list_tools()
+        await self.connect()
 
 
 
-            return tools
+        tools = await self.client.list_tools()
+
+
+
+        return tools
 
 
 
@@ -66,7 +124,35 @@ class MCPClient:
 
 
     # =================================================
-    # Execute MCP Tool
+    # Helper:
+    # Return only tool names
+    # =================================================
+
+
+    async def list_tool_names(self):
+
+
+        tools = await self.list_tools()
+
+
+
+        return [
+
+            tool.name
+
+            for tool in tools
+
+        ]
+
+
+
+
+
+
+
+
+    # =================================================
+    # MCP Tool Execution
     # =================================================
 
 
@@ -77,18 +163,53 @@ class MCPClient:
     ):
 
 
+        await self.connect()
 
-        async with self.client as client:
 
 
-            result = await client.call_tool(
+        result = await self.client.call_tool(
 
-                tool_name,
+            tool_name,
 
-                arguments
+            arguments
 
+        )
+
+
+
+        return result
+
+
+
+
+
+
+
+
+    # =================================================
+    # Debug
+    # =================================================
+
+
+    async def test_connection(self):
+
+
+        tools = await self.list_tools()
+
+
+
+        print(
+            "\nAvailable MCP Tools:"
+        )
+
+
+        for tool in tools:
+
+
+            print(
+                f"- {tool.name}"
             )
 
 
 
-            return result
+        return tools
