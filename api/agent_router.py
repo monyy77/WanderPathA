@@ -1,7 +1,7 @@
 """
 WanderPathA Agent Router
 
-Intelligent routing layer.
+Dynamic MCP Runtime Router
 
 User Message
       |
@@ -9,23 +9,23 @@ User Message
 LLM Router
       |
       v
-MCP Runtime Capabilities
+MCP Runtime Tools Discovery
       |
       v
-Capability Mapper
+Capability Validation
       |
       v
-Agent Validation
+Dynamic MCP Tool Calling
       |
       v
-Agent Execution
+WanderPath MCP Server
+
 
 Execution:
-    Planning -> Planning Agent
-    Memory   -> Memory Agent
-    Flight   -> MCP Tool Calling
-    Refund   -> MCP Tool Calling
-    VIP      -> MCP Tool Calling
+
+Planning -> Internal Agent
+Memory   -> Internal Agent
+Others   -> MCP Tools
 """
 
 
@@ -34,12 +34,9 @@ from planning.planning_agent import run_planning_agent
 
 from api.llm_router import LLMRouter
 
-from api.agent_registry import (
-    is_allowed_agent
-)
 
-from api.capability_mapper import (
-    capability_to_agent
+from api.mcp_validator import (
+    MCPCapabilityValidator
 )
 
 
@@ -52,9 +49,11 @@ try:
 
     from agent.agent import run_agent
 
+
 except Exception:
 
     run_agent = None
+
 
 
 
@@ -71,14 +70,29 @@ class AgentRouter:
     ):
 
 
-        # MCP Registry
-        # Runtime discovered tools
+        # -----------------------------------------
+        # MCP Runtime Registry
+        # -----------------------------------------
 
         self.mcp_registry = mcp_registry
 
 
 
+        # -----------------------------------------
+        # MCP Capability Validator
+        # -----------------------------------------
+
+        self.capability_validator = (
+            MCPCapabilityValidator(
+                mcp_registry
+            )
+        )
+
+
+
+        # -----------------------------------------
         # LLM Router
+        # -----------------------------------------
 
         self.llm_router = LLMRouter(
 
@@ -90,36 +104,6 @@ class AgentRouter:
 
 
 
-        # Available Routes
-
-        self.agents = {
-
-
-            "planning":
-
-                self.run_planning,
-
-
-            "memory":
-
-                self.run_memory,
-
-
-            "flight":
-
-                self.run_flight,
-
-
-            "refund":
-
-                self.run_refund,
-
-
-            "vip":
-
-                self.run_vip,
-
-        }
 
 
 
@@ -136,29 +120,27 @@ class AgentRouter:
     ):
 
 
-        message = request.get(
-            "message",
-            ""
+
+        capability = await self.classify(
+
+            request.get(
+                "message",
+                ""
+            )
+
         )
 
 
-        agent_id = await self.classify(
-            message
-        )
 
+        return await self.execute_capability(
 
+            capability,
 
-        if not is_allowed_agent(
-            agent_id
-        ):
-
-            agent_id = "planning"
-
-
-
-        return await self.agents[agent_id](
             request
+
         )
+
+
 
 
 
@@ -166,7 +148,7 @@ class AgentRouter:
 
 
     # =================================================
-    # LLM Classification
+    # Capability Classification
     # =================================================
 
 
@@ -176,8 +158,17 @@ class AgentRouter:
     ):
 
 
-        capability = await self.llm_router.classify(
-            message
+
+        capability = await (
+
+            self.llm_router
+
+            .classify(
+
+                message
+
+            )
+
         )
 
 
@@ -185,30 +176,36 @@ class AgentRouter:
         if capability:
 
 
-            agent = capability_to_agent(
-                capability
+
+            is_valid = await (
+
+                self.capability_validator
+
+                .is_valid_capability(
+
+                    capability
+
+                )
+
             )
 
 
 
-            if (
+            if is_valid:
 
-                agent
-
-                and
-
-                is_allowed_agent(agent)
-
-            ):
-
-                return agent
+                return capability
 
 
 
 
+
+
+        # fallback
 
         return self.keyword_fallback(
+
             message
+
         )
 
 
@@ -216,8 +213,59 @@ class AgentRouter:
 
 
 
+
+
+
     # =================================================
-    # Fallback Router
+    # Dynamic MCP Execution
+    # =================================================
+
+
+    async def execute_capability(
+        self,
+        capability,
+        request
+    ):
+
+
+
+        if self.mcp_registry is None:
+
+
+            raise RuntimeError(
+
+                "MCP Registry unavailable"
+
+            )
+
+
+
+        return await (
+
+            self.mcp_registry
+
+            .mcp_client
+
+            .call_tool(
+
+                capability,
+
+                request
+
+            )
+
+        )
+
+
+
+
+
+
+
+
+
+    # =================================================
+    # Keyword Fallback
     # =================================================
 
 
@@ -246,7 +294,12 @@ class AgentRouter:
 
         ):
 
-            return "refund"
+
+            return (
+                "refund_with_confirmation"
+            )
+
+
 
 
 
@@ -268,7 +321,38 @@ class AgentRouter:
 
         ):
 
-            return "flight"
+
+            return (
+                "rebook_flight"
+            )
+
+
+
+
+
+
+
+        if any(
+
+            word in text
+
+            for word in [
+
+                "vip",
+                "upgrade",
+                "premium",
+                "business"
+
+            ]
+
+        ):
+
+
+            return (
+                "upgrade_to_vip"
+            )
+
+
 
 
 
@@ -282,38 +366,28 @@ class AgentRouter:
                 "remember",
                 "forget",
                 "preference",
-                "prefer",
                 "save"
 
             ]
 
         ):
 
-            return "memory"
+
+            return (
+                "memory_agent"
+            )
 
 
 
 
-        if any(
 
-            word in text
 
-            for word in [
-
-                "vip",
-                "upgrade",
-                "business",
-                "premium"
-
-            ]
-
-        ):
-
-            return "vip"
+        return (
+            "planning_agent"
+        )
 
 
 
-        return "planning"
 
 
 
@@ -321,7 +395,7 @@ class AgentRouter:
 
 
     # =================================================
-    # Planning Agent
+    # Internal Planning Agent
     # =================================================
 
 
@@ -329,6 +403,7 @@ class AgentRouter:
         self,
         request
     ):
+
 
 
         result = run_planning_agent(
@@ -342,9 +417,9 @@ class AgentRouter:
         return {
 
 
-            "agent":
+            "tool":
 
-                "planning",
+                "planning_agent",
 
 
             "status":
@@ -364,8 +439,10 @@ class AgentRouter:
 
 
 
+
+
     # =================================================
-    # Memory Agent
+    # Internal Memory Agent
     # =================================================
 
 
@@ -375,10 +452,14 @@ class AgentRouter:
     ):
 
 
+
         if run_agent is None:
 
+
             raise RuntimeError(
+
                 "Memory Agent unavailable"
+
             )
 
 
@@ -394,202 +475,9 @@ class AgentRouter:
         return {
 
 
-            "agent":
+            "tool":
 
-                "memory",
-
-
-            "status":
-
-                "success",
-
-
-            "result":
-
-                result
-
-        }
-
-
-
-
-
-
-
-    # =================================================
-    # Flight MCP Execution
-    # =================================================
-
-
-    async def run_flight(
-        self,
-        request
-    ):
-
-
-        if self.mcp_registry is None:
-
-            raise RuntimeError(
-                "MCP Registry unavailable"
-            )
-
-
-
-        result = await self.mcp_registry.mcp_client.call_tool(
-
-            "rebook_flight",
-
-            {
-
-                "message":
-
-                    request["message"],
-
-
-                "customer_id":
-
-                    request.get(
-                        "customer_id"
-                    )
-
-            }
-
-        )
-
-
-
-        return {
-
-
-            "agent":
-
-                "flight",
-
-
-            "status":
-
-                "success",
-
-
-            "result":
-
-                result
-
-        }
-
-
-
-
-
-
-
-    # =================================================
-    # Refund MCP Execution
-    # =================================================
-
-
-    async def run_refund(
-        self,
-        request
-    ):
-
-
-        if self.mcp_registry is None:
-
-            raise RuntimeError(
-                "MCP Registry unavailable"
-            )
-
-
-
-        result = await self.mcp_registry.mcp_client.call_tool(
-
-            "refund_with_confirmation",
-
-            {
-
-
-                "booking_id":
-
-                    request.get(
-                        "booking_id"
-                    )
-
-            }
-
-        )
-
-
-
-        return {
-
-
-            "agent":
-
-                "refund",
-
-
-            "status":
-
-                "success",
-
-
-            "result":
-
-                result
-
-        }
-
-
-
-
-
-
-
-    # =================================================
-    # VIP MCP Execution
-    # =================================================
-
-
-    async def run_vip(
-        self,
-        request
-    ):
-
-
-        if self.mcp_registry is None:
-
-            raise RuntimeError(
-                "MCP Registry unavailable"
-            )
-
-
-
-        result = await self.mcp_registry.mcp_client.call_tool(
-
-            "upgrade_to_vip",
-
-            {
-
-
-                "customer_id":
-
-                    request.get(
-                        "customer_id"
-                    )
-
-            }
-
-        )
-
-
-
-        return {
-
-
-            "agent":
-
-                "vip",
+                "memory_agent",
 
 
             "status":
