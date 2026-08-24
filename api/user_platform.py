@@ -15,9 +15,11 @@ LLM Router
         |
 MCP Registry
         |
+MCP Client
+        |
 WanderPath MCP Server
         |
-Selected Agent / Graph
+Selected Capability / Tool Execution
 """
 
 
@@ -44,6 +46,8 @@ from api.llm_factory import get_llm
 
 
 
+
+
 # =======================================================
 # FastAPI Application
 # =======================================================
@@ -59,6 +63,7 @@ app = FastAPI(
     "Unified API for WanderPathA AI Agents",
 
 )
+
 
 
 
@@ -87,6 +92,7 @@ app.add_middleware(
 
 
 
+
 # =======================================================
 # MCP + LLM Initialization
 # =======================================================
@@ -95,26 +101,44 @@ app.add_middleware(
 """
 Runtime dependencies:
 
+
 LLM
+
  |
  +--> Gemini / Groq
 
 
+
 MCP Client
+
+ |
+ +--> FastMCP Client
+
  |
  +--> WanderPath MCP Server
 
 
+
 MCP Registry
+
  |
- +--> Runtime discovered tools
+ +--> Runtime discovered MCP tools
 
 """
 
 
-mcp_client = MCPClient()
+
+# MCP Server connection
+
+mcp_client = MCPClient(
+
+    server_url="http://localhost:8080"
+
+)
 
 
+
+# Runtime MCP capabilities registry
 
 mcp_registry = MCPRegistry(
 
@@ -124,7 +148,10 @@ mcp_registry = MCPRegistry(
 
 
 
+# LLM Provider
+
 llm = get_llm()
+
 
 
 
@@ -149,6 +176,7 @@ router = AgentRouter(
 
 
 
+
 # =======================================================
 # Health Check
 # =======================================================
@@ -164,7 +192,6 @@ async def root():
         "service":
 
             "WanderPathA User Platform API",
-
 
 
         "status":
@@ -190,6 +217,7 @@ async def health():
             "healthy",
 
     }
+
 
 
 
@@ -228,7 +256,6 @@ async def list_agents():
         },
 
 
-
         {
 
             "id":
@@ -246,7 +273,6 @@ async def list_agents():
                 "Task decomposition and planning",
 
         },
-
 
 
         {
@@ -268,7 +294,6 @@ async def list_agents():
         },
 
 
-
         {
 
             "id":
@@ -286,7 +311,6 @@ async def list_agents():
                 "Refund workflows",
 
         },
-
 
 
         {
@@ -307,8 +331,9 @@ async def list_agents():
 
         },
 
-
     ]
+
+
 
 
 
@@ -336,10 +361,9 @@ async def chat(request: ChatRequest):
     try:
 
 
-
         # User sends only message.
         #
-        # AgentRouter decides:
+        # Router decides:
         #
         # Planning
         # Memory
@@ -349,8 +373,7 @@ async def chat(request: ChatRequest):
         #
         # using:
         #
-        # LLM + MCP Discovery
-
+        # LLM + MCP Runtime Discovery
 
 
         result = router.route(
@@ -363,11 +386,9 @@ async def chat(request: ChatRequest):
                     request.message,
 
 
-
                 "session_id":
 
                     request.session_id,
-
 
 
                 "customer_id":
@@ -383,8 +404,8 @@ async def chat(request: ChatRequest):
 
 
 
-        return ChatResponse(
 
+        return ChatResponse(
 
 
             agent_id=
@@ -399,12 +420,9 @@ async def chat(request: ChatRequest):
 
 
 
-
             session_id=
 
                 request.session_id,
-
-
 
 
 
@@ -420,8 +438,6 @@ async def chat(request: ChatRequest):
 
 
 
-
-
             execution={
 
 
@@ -434,7 +450,6 @@ async def chat(request: ChatRequest):
                         "completed",
 
                     ),
-
 
 
 
@@ -457,6 +472,7 @@ async def chat(request: ChatRequest):
 
 
 
+
     except ValueError as exc:
 
 
@@ -467,6 +483,7 @@ async def chat(request: ChatRequest):
             detail=str(exc),
 
         )
+
 
 
 
@@ -484,6 +501,8 @@ async def chat(request: ChatRequest):
                 f"Internal server error: {str(exc)}",
 
         )
+
+
 
 
 
