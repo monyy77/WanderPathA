@@ -3,13 +3,13 @@ WanderPathA Agent Router
 
 Intelligent routing layer.
 
-User message
+User Message
       |
       v
 LLM Router
       |
       v
-MCP Capability
+MCP Runtime Capabilities
       |
       v
 Capability Mapper
@@ -18,10 +18,14 @@ Capability Mapper
 Agent Validation
       |
       v
-Fallback Keyword Router (if needed)
-      |
-      v
-Agent execution
+Agent Execution
+
+Execution:
+    Planning -> Planning Agent
+    Memory   -> Memory Agent
+    Flight   -> MCP Tool Calling
+    Refund   -> MCP Tool Calling
+    VIP      -> MCP Tool Calling
 """
 
 
@@ -41,7 +45,7 @@ from api.capability_mapper import (
 
 
 # -------------------------------------------------
-# Optional Imports
+# Optional Memory Agent
 # -------------------------------------------------
 
 try:
@@ -51,45 +55,6 @@ try:
 except Exception:
 
     run_agent = None
-
-
-
-
-try:
-
-    from state_graph.graphs.flight_rebooking import (
-        run_flight_rebooking_graph
-    )
-
-except Exception:
-
-    run_flight_rebooking_graph = None
-
-
-
-
-try:
-
-    from state_graph.graphs.refund import (
-        run_refund_graph
-    )
-
-except Exception:
-
-    run_refund_graph = None
-
-
-
-
-try:
-
-    from state_graph.graphs.vip import (
-        run_vip_graph
-    )
-
-except Exception:
-
-    run_vip_graph = None
 
 
 
@@ -106,16 +71,14 @@ class AgentRouter:
     ):
 
 
-        # -----------------------------------------
-        # MCP-aware LLM Router
-        # -----------------------------------------
-        #
-        # LLM decides capability
-        # based on runtime MCP tools
-        #
-        # mcp_registry provides:
-        # tools/list discovery
-        #
+        # MCP Registry
+        # Runtime discovered tools
+
+        self.mcp_registry = mcp_registry
+
+
+
+        # LLM Router
 
         self.llm_router = LLMRouter(
 
@@ -127,9 +90,7 @@ class AgentRouter:
 
 
 
-        # -----------------------------------------
-        # Available execution routes
-        # -----------------------------------------
+        # Available Routes
 
         self.agents = {
 
@@ -139,11 +100,9 @@ class AgentRouter:
                 self.run_planning,
 
 
-
             "memory":
 
                 self.run_memory,
-
 
 
             "flight":
@@ -151,11 +110,9 @@ class AgentRouter:
                 self.run_flight,
 
 
-
             "refund":
 
                 self.run_refund,
-
 
 
             "vip":
@@ -164,12 +121,19 @@ class AgentRouter:
 
         }
 
+
+
+
+
     # =================================================
     # Main Router
     # =================================================
 
 
-    def route(self, request: dict):
+    async def route(
+        self,
+        request: dict
+    ):
 
 
         message = request.get(
@@ -178,14 +142,11 @@ class AgentRouter:
         )
 
 
-
-        agent_id = self.classify(
+        agent_id = await self.classify(
             message
         )
 
 
-
-        # Final safety validation
 
         if not is_allowed_agent(
             agent_id
@@ -195,7 +156,7 @@ class AgentRouter:
 
 
 
-        return self.agents[agent_id](
+        return await self.agents[agent_id](
             request
         )
 
@@ -205,22 +166,18 @@ class AgentRouter:
 
 
     # =================================================
-    # Intelligent Classifier
+    # LLM Classification
     # =================================================
 
 
-    def classify(self, message: str):
+    async def classify(
+        self,
+        message: str
+    ):
 
 
-        # -----------------------------------------
-        # First: MCP + LLM Routing
-        # -----------------------------------------
-
-        capability = (
-
-            self.llm_router
-            .classify(message)
-
+        capability = await self.llm_router.classify(
+            message
         )
 
 
@@ -250,11 +207,6 @@ class AgentRouter:
 
 
 
-
-        # -----------------------------------------
-        # Second: Fallback Router
-        # -----------------------------------------
-
         return self.keyword_fallback(
             message
         )
@@ -264,23 +216,20 @@ class AgentRouter:
 
 
 
-
-
     # =================================================
-    # Keyword Fallback
+    # Fallback Router
     # =================================================
 
 
-    def keyword_fallback(self, message):
+    def keyword_fallback(
+        self,
+        message
+    ):
 
 
         text = message.lower()
 
 
-
-        # -------------------------------
-        # Refund
-        # -------------------------------
 
         if any(
 
@@ -289,12 +238,9 @@ class AgentRouter:
             for word in [
 
                 "refund",
-
                 "compensation",
-
                 "money back",
-
-                "reimbursement",
+                "reimbursement"
 
             ]
 
@@ -305,12 +251,6 @@ class AgentRouter:
 
 
 
-
-
-        # -------------------------------
-        # Flight
-        # -------------------------------
-
         if any(
 
             word in text
@@ -318,16 +258,11 @@ class AgentRouter:
             for word in [
 
                 "flight",
-
                 "cancelled",
-
                 "canceled",
-
                 "delayed",
-
                 "rebook",
-
-                "reschedule",
+                "reschedule"
 
             ]
 
@@ -338,12 +273,6 @@ class AgentRouter:
 
 
 
-
-
-        # -------------------------------
-        # Memory
-        # -------------------------------
-
         if any(
 
             word in text
@@ -351,14 +280,10 @@ class AgentRouter:
             for word in [
 
                 "remember",
-
                 "forget",
-
                 "preference",
-
                 "prefer",
-
-                "save my",
+                "save"
 
             ]
 
@@ -369,12 +294,6 @@ class AgentRouter:
 
 
 
-
-
-        # -------------------------------
-        # VIP
-        # -------------------------------
-
         if any(
 
             word in text
@@ -382,14 +301,9 @@ class AgentRouter:
             for word in [
 
                 "vip",
-
                 "upgrade",
-
-                "business class",
-
-                "luxury",
-
-                "premium",
+                "business",
+                "premium"
 
             ]
 
@@ -399,15 +313,7 @@ class AgentRouter:
 
 
 
-
-
-
-        # Default
-
         return "planning"
-
-
-
 
 
 
@@ -419,7 +325,10 @@ class AgentRouter:
     # =================================================
 
 
-    def run_planning(self, request):
+    async def run_planning(
+        self,
+        request
+    ):
 
 
         result = run_planning_agent(
@@ -438,20 +347,16 @@ class AgentRouter:
                 "planning",
 
 
-
             "status":
 
                 "success",
 
 
-
             "result":
 
-                result,
+                result
 
         }
-
-
 
 
 
@@ -464,16 +369,16 @@ class AgentRouter:
     # =================================================
 
 
-    def run_memory(self, request):
+    async def run_memory(
+        self,
+        request
+    ):
 
 
         if run_agent is None:
 
-
             raise RuntimeError(
-
                 "Memory Agent unavailable"
-
             )
 
 
@@ -494,16 +399,14 @@ class AgentRouter:
                 "memory",
 
 
-
             "status":
 
                 "success",
 
 
-
             "result":
 
-                result,
+                result
 
         }
 
@@ -513,30 +416,43 @@ class AgentRouter:
 
 
 
-
-
     # =================================================
-    # Flight Graph
+    # Flight MCP Execution
     # =================================================
 
 
-    def run_flight(self, request):
+    async def run_flight(
+        self,
+        request
+    ):
 
 
-        if run_flight_rebooking_graph is None:
-
+        if self.mcp_registry is None:
 
             raise RuntimeError(
-
-                "Flight Graph unavailable"
-
+                "MCP Registry unavailable"
             )
 
 
 
-        result = run_flight_rebooking_graph(
+        result = await self.mcp_registry.mcp_client.call_tool(
 
-            request
+            "rebook_flight",
+
+            {
+
+                "message":
+
+                    request["message"],
+
+
+                "customer_id":
+
+                    request.get(
+                        "customer_id"
+                    )
+
+            }
 
         )
 
@@ -550,16 +466,14 @@ class AgentRouter:
                 "flight",
 
 
-
             "status":
 
                 "success",
 
 
-
             "result":
 
-                result,
+                result
 
         }
 
@@ -569,30 +483,39 @@ class AgentRouter:
 
 
 
-
-
     # =================================================
-    # Refund Graph
+    # Refund MCP Execution
     # =================================================
 
 
-    def run_refund(self, request):
+    async def run_refund(
+        self,
+        request
+    ):
 
 
-        if run_refund_graph is None:
-
+        if self.mcp_registry is None:
 
             raise RuntimeError(
-
-                "Refund Graph unavailable"
-
+                "MCP Registry unavailable"
             )
 
 
 
-        result = run_refund_graph(
+        result = await self.mcp_registry.mcp_client.call_tool(
 
-            request
+            "refund_with_confirmation",
+
+            {
+
+
+                "booking_id":
+
+                    request.get(
+                        "booking_id"
+                    )
+
+            }
 
         )
 
@@ -606,16 +529,14 @@ class AgentRouter:
                 "refund",
 
 
-
             "status":
 
                 "success",
 
 
-
             "result":
 
-                result,
+                result
 
         }
 
@@ -625,30 +546,39 @@ class AgentRouter:
 
 
 
-
-
     # =================================================
-    # VIP Graph
+    # VIP MCP Execution
     # =================================================
 
 
-    def run_vip(self, request):
+    async def run_vip(
+        self,
+        request
+    ):
 
 
-        if run_vip_graph is None:
-
+        if self.mcp_registry is None:
 
             raise RuntimeError(
-
-                "VIP Graph unavailable"
-
+                "MCP Registry unavailable"
             )
 
 
 
-        result = run_vip_graph(
+        result = await self.mcp_registry.mcp_client.call_tool(
 
-            request
+            "upgrade_to_vip",
+
+            {
+
+
+                "customer_id":
+
+                    request.get(
+                        "customer_id"
+                    )
+
+            }
 
         )
 
@@ -662,15 +592,13 @@ class AgentRouter:
                 "vip",
 
 
-
             "status":
 
                 "success",
 
 
-
             "result":
 
-                result,
+                result
 
         }
