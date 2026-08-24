@@ -1,4 +1,5 @@
 # Initialize FastMCP server for WanderPathA
+
 mcp = FastMCP("WanderPathA Travel Agent Server")
 
 
