@@ -51,7 +51,7 @@ export interface ExecutionInfo {
 
     status: string;
 
-    agent: string;
+    tool: string;
 
 }
 
@@ -73,6 +73,8 @@ export interface ChatResponse {
 
 }
 
+
+
 // ======================================================
 // Agents
 // ======================================================
@@ -91,6 +93,8 @@ export interface Agent {
 
 }
 
+
+
 // ======================================================
 // API Error
 // ======================================================
@@ -103,9 +107,12 @@ class APIError extends Error {
 
 
     constructor(
+
         message: string,
+
         status?: number
-    ){
+
+    ) {
 
         super(message);
 
@@ -116,6 +123,8 @@ class APIError extends Error {
     }
 
 }
+
+
 
 // ======================================================
 // Generic Fetch Wrapper
@@ -128,12 +137,10 @@ async function apiFetch<T>(
 
     options?: RequestInit
 
-): Promise<T>{
-
+): Promise<T> {
 
 
     try {
-
 
 
         const response = await fetch(
@@ -143,7 +150,7 @@ async function apiFetch<T>(
             {
 
 
-                headers:{
+                headers: {
 
 
                     "Content-Type":
@@ -162,13 +169,38 @@ async function apiFetch<T>(
 
 
 
+        if (!response.ok) {
 
-        if(!response.ok){
+
+            let errorMessage =
+                `API Error: ${response.status}`;
+
+
+            try {
+
+
+                const error =
+                    await response.json();
+
+
+                errorMessage =
+                    error.detail ??
+                    errorMessage;
+
+
+            }
+
+            catch {
+
+                // Ignore JSON parsing errors
+
+            }
+
 
 
             throw new APIError(
 
-                `API Error: ${response.status}`,
+                errorMessage,
 
                 response.status
 
@@ -182,15 +214,14 @@ async function apiFetch<T>(
         return await response.json();
 
 
-
     }
 
 
-    catch(error){
+    catch (error) {
 
 
 
-        if(error instanceof APIError){
+        if (error instanceof APIError) {
 
             throw error;
 
@@ -209,6 +240,8 @@ async function apiFetch<T>(
 }
 
 
+
+
 // ======================================================
 // Send Chat Message
 // ======================================================
@@ -218,7 +251,7 @@ export async function sendMessage(
 
     request: ChatRequest
 
-): Promise<ChatResponse>{
+): Promise<ChatResponse> {
 
 
 
@@ -231,11 +264,11 @@ export async function sendMessage(
         {
 
 
-            method:"POST",
+            method: "POST",
 
 
 
-            body:JSON.stringify({
+            body: JSON.stringify({
 
 
                 message:
@@ -252,7 +285,9 @@ export async function sendMessage(
 
                 customer_id:
 
-                    request.customer_id || "C001",
+                    request.customer_id ||
+
+                    "C001",
 
 
 
@@ -267,14 +302,17 @@ export async function sendMessage(
 }
 
 
+
+
+
 // ======================================================
 // Get Available Agents
 // ======================================================
 
 
-export async function getAgents()
+export async function getAgents():
 
-: Promise<Agent[]>{
+    Promise<Agent[]> {
 
 
 
@@ -286,18 +324,23 @@ export async function getAgents()
 
 }
 
+
+
+
+
 // ======================================================
 // Health Check
 // ======================================================
 
 
-export async function healthCheck()
+export async function healthCheck():
 
-: Promise<boolean>{
+    Promise<boolean> {
 
 
 
-    try{
+    try {
+
 
 
         await apiFetch(
@@ -312,14 +355,19 @@ export async function healthCheck()
 
     }
 
-    catch{
+
+    catch {
 
 
         return false;
 
+
     }
 
 }
+
+
+
 
 
 // ======================================================
@@ -330,43 +378,51 @@ export async function healthCheck()
 
 export function mockResponse(
 
-    message:string,
+    message: string,
 
-    agent:string
+    agent: string
 
-):ChatResponse{
+): ChatResponse {
+
 
 
     return {
 
 
-        agent_id:agent,
+
+        agent_id: agent,
 
 
-        session_id:"demo",
+
+        session_id: "demo",
+
 
 
         response:
 
 
-        `I received your request:
-        
+            `I received your request:
+
 "${message}"
 
 WanderPathA ${agent} is processing your request.`,
 
 
 
-        execution:{
+
+        execution: {
 
 
-            status:"success",
+
+            status: "success",
 
 
-            agent:agent,
+
+            tool: agent,
 
 
         }
+
 
     };
 
