@@ -1,0 +1,68 @@
+{
+  "agent": "planning_agent (IROPS reshuffle)",
+  "mode": "decomposition_first",
+  "goal": "Check the current status of flight 1.",
+  "model": "llama-3.1-8b-instant",
+  "plan": {
+    "goal": "Check the current status of flight 1.",
+    "tasks": [
+      {
+        "id": "t1",
+        "instruction": "Retrieve the operational status of flight 1.",
+        "depends_on": [],
+        "kind": "tool_call",
+        "tool_name": "get_flight_status"
+      },
+      {
+        "id": "t2",
+        "instruction": "Obtain the current delay duration for flight 1.",
+        "depends_on": [],
+        "kind": "tool_call",
+        "tool_name": "get_delay_duration"
+      },
+      {
+        "id": "t3",
+        "instruction": "Fetch the current weather at the departure airport of flight 1.",
+        "depends_on": [],
+        "kind": "tool_call",
+        "tool_name": "get_weather"
+      },
+      {
+        "id": "t4",
+        "instruction": "Synthesize the flight status, delay, and weather into a concise status report for flight 1.",
+        "depends_on": [
+          "t1",
+          "t2",
+          "t3"
+        ],
+        "kind": "reasoning",
+        "tool_name": null
+      }
+    ]
+  },
+  "execution_batches": [
+    [
+      "t1",
+      "t2",
+      "t3"
+    ],
+    [
+      "t4"
+    ]
+  ],
+  "outputs": {
+    "t1": "[{'type': 'text', 'text': '1 validation error for call[get_flight_status]\\nflight_id\\n  Missing required argument [type=missing_argument, input_value={}, input_type=dict]\\n    For further information visit https://errors.pydantic.dev/2.12/v/missing_argument', 'id': 'lc_b0296962-a93d-4fd9-a7e5-6c705512b2cb'}]",
+    "t2": "[{'type': 'text', 'text': '1 validation error for call[get_delay_duration]\\nflight_id\\n  Missing required argument [type=missing_argument, input_value={}, input_type=dict]\\n    For further information visit https://errors.pydantic.dev/2.12/v/missing_argument', 'id': 'lc_3d374464-12ce-4061-b8ba-b1bdf272d5d1'}]",
+    "t3": "[{'type': 'text', 'text': '1 validation error for call[get_weather]\\nairport_code\\n  Missing required argument [type=missing_argument, input_value={}, input_type=dict]\\n    For further information visit https://errors.pydantic.dev/2.12/v/missing_argument', 'id': 'lc_10f11821-2a85-4e4e-8eeb-aaaf0e936046'}]",
+    "t4": "I’m unable to generate a status report for flight 1 because the prerequisite calls that should provide the flight’s status, delay information, and weather all failed with validation errors (missing required arguments). Without that data, I cannot synthesize a concrete report."
+  },
+  "result": "I’m unable to generate a status report for flight 1 because the prerequisite calls that should provide the flight’s status, delay information, and weather all failed with validation errors (missing required arguments). Without that data, I cannot synthesize a concrete report.",
+  "token_usage": {
+    "llm_calls": 1,
+    "input_tokens": 445,
+    "output_tokens": 159,
+    "total_tokens": 604,
+    "peak_input_tokens": 445
+  },
+  "latency_seconds": 20.739
+}

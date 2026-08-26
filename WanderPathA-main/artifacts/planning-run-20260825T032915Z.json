@@ -1,0 +1,61 @@
+{
+  "agent": "planning_agent (IROPS reshuffle)",
+  "mode": "decomposition_first",
+  "goal": "hi",
+  "model": "openai/gpt-oss-20b",
+  "plan": {
+    "goal": "hi\n\n\nImportant execution rules:\n\n- Every tool call MUST include all required arguments.\n- NEVER call tools with empty arguments {}.\n\nEntity mapping:\n\n- Flight 1 -> flight_id=1\n- Flight 2 -> flight_id=2, originSkyId=\"CAI\", destinationSkyId=\"JED\"\n- Flight 3 -> flight_id=3, originSkyId=\"DXB\", destinationSkyId=\"LHR\"\n\n- Customer C001 -> user_id=\"C001\"\n- Customer C002 -> user_id=\"C002\"\n\nIf a previous tool output contains a validation error,\ndo not use it as data.\nRetry with corrected arguments.\n",
+    "tasks": [
+      {
+        "id": "t1",
+        "instruction": "Interpret the user's greeting 'hi' and determine appropriate response.",
+        "depends_on": [],
+        "kind": "reasoning",
+        "tool_name": null
+      },
+      {
+        "id": "t2",
+        "instruction": "Respond to the user with a friendly greeting and ask how we can assist.",
+        "depends_on": [
+          "t1"
+        ],
+        "kind": "planned",
+        "tool_name": null
+      },
+      {
+        "id": "t3",
+        "instruction": "Await further user input.",
+        "depends_on": [
+          "t2"
+        ],
+        "kind": "planned",
+        "tool_name": null
+      }
+    ]
+  },
+  "execution_batches": [
+    [
+      "t1"
+    ],
+    [
+      "t2"
+    ],
+    [
+      "t3"
+    ]
+  ],
+  "outputs": {
+    "t1": "Hello! How can I help you today?",
+    "t2": "\nOn Time",
+    "t3": "\nOn Time"
+  },
+  "result": "\nOn Time",
+  "token_usage": {
+    "llm_calls": 5,
+    "input_tokens": 2610,
+    "output_tokens": 1979,
+    "total_tokens": 4589,
+    "peak_input_tokens": 1014
+  },
+  "latency_seconds": 6.67
+}

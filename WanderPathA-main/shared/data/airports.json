@@ -1,0 +1,34 @@
+{
+  "CAI": {
+    "city": "Cairo",
+    "country": "Egypt",
+    "name": "Cairo International Airport",
+    "entityId": "104120222",
+    "status": "Open",
+    "weather": "Sunny"
+  },
+  "DXB": {
+    "city": "Dubai",
+    "country": "UAE",
+    "name": "Dubai International Airport",
+    "entityId": "95673850",
+    "status": "Open",
+    "weather": "Hot"
+  },
+  "JED": {
+    "city": "Jeddah",
+    "country": "Saudi Arabia",
+    "name": "King Abdulaziz International Airport",
+    "entityId": "95673880",
+    "status": "Busy",
+    "weather": "Windy"
+  },
+  "LHR": {
+    "city": "London",
+    "country": "United Kingdom",
+    "name": "Heathrow Airport",
+    "entityId": "95565010",
+    "status": "Closed",
+    "weather": "Storm"
+  }
+}

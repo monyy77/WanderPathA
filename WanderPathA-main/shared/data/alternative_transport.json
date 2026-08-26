@@ -1,0 +1,27 @@
+{
+  "DXB": [
+    {
+      "flight_number": "EK928",
+      "airline": "Emirates",
+      "price": 420
+    }
+  ],
+  "JED": [
+    {
+      "flight_number": "MS210",
+      "airline": "EgyptAir",
+      "price": 360
+    },
+    {
+      "type": "Bus",
+      "id": "B201"
+    }
+  ],
+  "LHR": [
+    {
+      "flight_number": "BA401",
+      "airline": "British Airways",
+      "price": 410
+    }
+  ]
+}

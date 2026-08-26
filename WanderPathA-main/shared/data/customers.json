@@ -1,0 +1,29 @@
+{
+  "C001": {
+    "name": "Ahmed Ali",
+    "phone": "+201111111111",
+    "email": "ahmed@email.com",
+    "country": "Egypt",
+    "city": "Cairo",
+    "vip": false,
+    "bookings": ["B001"]
+  },
+  "C002": {
+    "name": "Sara Mohamed",
+    "phone": "+201222222222",
+    "email": "sara@email.com",
+    "country": "Egypt",
+    "city": "Alexandria",
+    "vip": true,
+    "bookings": ["B002"]
+  },
+  "C003": {
+    "name": "Omar Hassan",
+    "phone": "+201333333333",
+    "email": "omar@email.com",
+    "country": "Egypt",
+    "city": "Giza",
+    "vip": false,
+    "bookings": ["B003"]
+  }
+}

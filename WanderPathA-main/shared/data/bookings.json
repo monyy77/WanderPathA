@@ -1,0 +1,26 @@
+{
+  "B001": {
+    "customer_id": "C001",
+    "flight_id": "MS101",
+    "trip_cost": 1200,
+    "refund_eligible": true,
+    "refund_amount": 1200,
+    "compensation": 250
+  },
+  "B002": {
+    "customer_id": "C002",
+    "flight_id": "MS202",
+    "trip_cost": 850,
+    "refund_eligible": false,
+    "refund_amount": 0,
+    "compensation": 100
+  },
+  "B003": {
+    "customer_id": "C003",
+    "flight_id": "MS303",
+    "trip_cost": 1500,
+    "refund_eligible": true,
+    "refund_amount": 1500,
+    "compensation": 300
+  }
+}
